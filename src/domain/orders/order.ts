@@ -30,6 +30,7 @@ export interface Order extends AuditStamp {
   deliveryFee?: Money;
   total: Money;
   reservationExpiresAt?: string;
+  notes?: string;
 }
 
 export interface OrderLine {
