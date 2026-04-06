@@ -1,6 +1,7 @@
 import { prisma } from "../../core/db/prisma.js";
-import type { Order } from "../../domain/orders/order.js";
+import type { FulfillmentRecord, Order } from "../../domain/orders/order.js";
 import type {
+  FulfillmentDeliveryContext,
   FulfillmentRepository,
   FulfillmentShipmentContext
 } from "../../ports/fulfillment-repository.js";
@@ -30,6 +31,19 @@ type OrderRecord = {
     titleSnapshot: string;
     quantity: number;
   }>;
+  fulfillmentRecord?: {
+    id: string;
+    sellerId: string;
+    orderId: string;
+    status: string;
+    bookingReference: string | null;
+    courierName: string | null;
+    trackingNumber: string | null;
+    handedOffAt: Date | null;
+    deliveredAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
 };
 
 function mapOrder(record: OrderRecord): Order {
@@ -59,6 +73,24 @@ function mapOrder(record: OrderRecord): Order {
     },
     reservationExpiresAt: record.reservationExpiresAt?.toISOString(),
     notes: record.notes ?? undefined,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  };
+}
+
+function mapFulfillmentRecord(
+  record: NonNullable<OrderRecord["fulfillmentRecord"]>
+): FulfillmentRecord {
+  return {
+    id: record.id,
+    sellerId: record.sellerId,
+    orderId: record.orderId,
+    status: record.status.toLowerCase() as FulfillmentRecord["status"],
+    bookingReference: record.bookingReference ?? undefined,
+    courierName: record.courierName ?? undefined,
+    trackingNumber: record.trackingNumber ?? undefined,
+    handedOffAt: record.handedOffAt?.toISOString(),
+    deliveredAt: record.deliveredAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   };
@@ -98,6 +130,28 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
         titleSnapshot: line.titleSnapshot,
         quantity: line.quantity
       }))
+    };
+  }
+
+  async getDeliveryContext(orderId: string): Promise<FulfillmentDeliveryContext | null> {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        fulfillmentRecord: true
+      }
+    });
+
+    if (!order) {
+      return null;
+    }
+
+    const record = order as unknown as OrderRecord;
+
+    return {
+      order: mapOrder(record),
+      fulfillmentRecord: record.fulfillmentRecord
+        ? mapFulfillmentRecord(record.fulfillmentRecord)
+        : undefined
     };
   }
 }

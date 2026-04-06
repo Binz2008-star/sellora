@@ -76,6 +76,7 @@ export * from "./application/catalog/catalog-publication.service.js";
 export * from "./application/discovery/discovery-orchestrator.js";
 export * from "./application/orders/create-order.service.js";
 export * from "./application/orders/book-order-shipment.service.js";
+export * from "./application/orders/confirm-order-delivery.service.js";
 export * from "./application/orders/transition-order.service.js";
 export * from "./application/payments/payment.service.js";
 export * from "./application/pipeline/autonomous-listing-pipeline.service.js";

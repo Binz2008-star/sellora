@@ -1,4 +1,4 @@
-import type { Order } from "../domain/orders/order.js";
+import type { FulfillmentRecord, Order } from "../domain/orders/order.js";
 
 export interface FulfillmentShipmentLine {
   productOfferingId: string;
@@ -12,6 +12,12 @@ export interface FulfillmentShipmentContext {
   lines: FulfillmentShipmentLine[];
 }
 
+export interface FulfillmentDeliveryContext {
+  order: Order;
+  fulfillmentRecord?: FulfillmentRecord;
+}
+
 export interface FulfillmentRepository {
   getShipmentContext(orderId: string): Promise<FulfillmentShipmentContext | null>;
+  getDeliveryContext(orderId: string): Promise<FulfillmentDeliveryContext | null>;
 }
