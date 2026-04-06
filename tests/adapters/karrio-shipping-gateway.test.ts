@@ -134,4 +134,63 @@ describe("KarrioShippingGateway", () => {
       }
     });
   });
+
+  it("maps shipment status response into normalized status snapshot", async () => {
+    const { gateway, fetchFn } = createGateway({
+      ok: true,
+      payload: {
+        data: {
+          id: "shp_123",
+          tracking_number: "TRK_123",
+          tracking_url: "https://track.example/TRK_123",
+          carrier_name: "karrio-carrier",
+          status: "delivered",
+          updated_at: "2026-04-06T00:00:00.000Z"
+        }
+      }
+    });
+
+    const result = await gateway.getShipmentStatus({
+      bookingReference: "shp_123",
+      trackingNumber: "TRK_123"
+    });
+
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchFn.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.karrio.test/v1/trackers/shp_123");
+    expect(init.method).toBe("GET");
+    expect(result).toEqual({
+      success: true,
+      provider: "karrio",
+      providerReference: "shp_123",
+      trackingNumber: "TRK_123",
+      trackingUrl: "https://track.example/TRK_123",
+      courierName: "karrio-carrier",
+      normalizedStatus: "delivered",
+      observedAt: "2026-04-06T00:00:00.000Z",
+      rawPayload: {
+        id: "shp_123",
+        tracking_number: "TRK_123",
+        tracking_url: "https://track.example/TRK_123",
+        carrier_name: "karrio-carrier",
+        status: "delivered",
+        updated_at: "2026-04-06T00:00:00.000Z"
+      }
+    });
+  });
+
+  it("returns normalized failure when status lookup has no identifier", async () => {
+    const { gateway, fetchFn } = createGateway({
+      ok: true,
+      payload: {}
+    });
+
+    const result = await gateway.getShipmentStatus({});
+
+    expect(fetchFn).toHaveBeenCalledTimes(0);
+    expect(result.success).toBe(false);
+    expect(result.failureMessage).toBe(
+      "Shipment status lookup requires booking reference or tracking number"
+    );
+  });
 });

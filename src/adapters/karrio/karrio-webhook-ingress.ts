@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
 import { createIdempotencyKey } from "../../modules/events/idempotency.js";
+import type { ShipmentStatusResult } from "../../ports/shipping-gateway.js";
 
 export interface KarrioWebhookIngressInput {
   headers: Record<string, string | undefined>;
@@ -94,5 +95,39 @@ export function normalizeKarrioWebhook(
     normalizedStatus,
     rawPayload,
     receivedAt: occurredAt
+  };
+}
+
+export function normalizeKarrioShipmentStatusSnapshot(
+  snapshot: ShipmentStatusResult
+): NormalizedShippingWebhook {
+  if (
+    snapshot.provider !== "karrio" ||
+    !snapshot.normalizedStatus ||
+    !snapshot.rawPayload
+  ) {
+    throw new Error("Invalid Karrio shipment status snapshot");
+  }
+
+  const providerReference = snapshot.providerReference;
+  const trackingNumber = snapshot.trackingNumber;
+  const occurredAt = snapshot.observedAt ?? `snapshot:${snapshot.normalizedStatus}`;
+
+  return {
+    provider: "karrio",
+    eventType: "tracker.reconciled",
+    idempotencyKey: createIdempotencyKey([
+      "karrio",
+      "tracker.reconciled",
+      providerReference ?? "unknown-reference",
+      trackingNumber ?? "unknown-tracking",
+      snapshot.normalizedStatus,
+      occurredAt
+    ]),
+    providerReference,
+    trackingNumber,
+    normalizedStatus: snapshot.normalizedStatus,
+    rawPayload: snapshot.rawPayload,
+    receivedAt: snapshot.observedAt ?? new Date().toISOString()
   };
 }

@@ -22,6 +22,26 @@ export interface ShipmentBookingResult {
   failureMessage?: string;
 }
 
+export interface ShipmentStatusRequest {
+  bookingReference?: string;
+  trackingNumber?: string;
+}
+
+export interface ShipmentStatusResult {
+  success: boolean;
+  provider: string;
+  providerReference?: string;
+  trackingNumber?: string;
+  trackingUrl?: string;
+  courierName?: string;
+  normalizedStatus?: string;
+  observedAt?: string;
+  rawPayload?: KeyValueRecord;
+  failureCode?: string;
+  failureMessage?: string;
+}
+
 export interface ShippingGateway {
   bookShipment(request: ShipmentBookingRequest): Promise<ShipmentBookingResult>;
+  getShipmentStatus(request: ShipmentStatusRequest): Promise<ShipmentStatusResult>;
 }

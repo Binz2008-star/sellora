@@ -83,5 +83,6 @@ export * from "./application/orders/confirm-order-delivery.service.js";
 export * from "./application/orders/transition-order.service.js";
 export * from "./application/fulfillment/handle-shipping-webhook.service.js";
 export * from "./application/fulfillment/handle-karrio-webhook.request.js";
+export * from "./application/fulfillment/reconcile-shipment-status.service.js";
 export * from "./application/payments/payment.service.js";
 export * from "./application/pipeline/autonomous-listing-pipeline.service.js";

@@ -2,6 +2,8 @@ import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type {
   ShipmentBookingRequest,
   ShipmentBookingResult,
+  ShipmentStatusRequest,
+  ShipmentStatusResult,
   ShippingGateway
 } from "../../ports/shipping-gateway.js";
 
@@ -47,6 +49,8 @@ type KarrioShipmentResponse = {
   label_url?: string;
   carrier_name?: string;
   provider?: string;
+  status?: string;
+  updated_at?: string;
   messages?: Array<{
     code?: string;
     message?: string;
@@ -142,6 +146,40 @@ function normalizeSuccess(
   };
 }
 
+function normalizeStatusSuccess(
+  provider: string,
+  payload: unknown,
+  fallbackProviderName?: string
+): ShipmentStatusResult {
+  const rawPayload = extractPayloadObject(payload);
+  const tracker = payload as KarrioShipmentResponse;
+  const providerReference = tracker.id ?? tracker.shipment_id;
+  const trackingUrl = tracker.tracking_url ?? tracker.label_url;
+  const courierName = tracker.carrier_name ?? tracker.provider ?? fallbackProviderName ?? provider;
+  const normalizedStatus = tracker.status?.toLowerCase();
+
+  if (!normalizedStatus) {
+    return {
+      success: false,
+      provider,
+      rawPayload,
+      failureMessage: "Karrio status response missing shipment status"
+    };
+  }
+
+  return {
+    success: true,
+    provider,
+    providerReference,
+    trackingNumber: tracker.tracking_number,
+    trackingUrl,
+    courierName,
+    normalizedStatus,
+    observedAt: tracker.updated_at,
+    rawPayload
+  };
+}
+
 export class KarrioShippingGateway implements ShippingGateway {
   private readonly fetchFn: typeof fetch;
 
@@ -196,5 +234,57 @@ export class KarrioShippingGateway implements ShippingGateway {
         payload) as unknown;
 
     return normalizeSuccess(provider, shipmentPayload, this.options.providerName);
+  }
+
+  async getShipmentStatus(request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
+    const provider = this.options.providerName ?? "karrio";
+
+    if (!request.bookingReference && !request.trackingNumber) {
+      return {
+        success: false,
+        provider,
+        failureMessage: "Shipment status lookup requires booking reference or tracking number"
+      };
+    }
+
+    const reference = request.bookingReference ?? request.trackingNumber!;
+    const endpoint = `${trimTrailingSlash(this.options.baseUrl)}/v1/trackers/${encodeURIComponent(reference)}`;
+    const response = await this.fetchFn(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: `Token ${this.options.apiKey}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    let payload: unknown;
+
+    try {
+      payload = await response.json();
+    } catch {
+      payload = {
+        error: {
+          message: "Karrio status response was not valid JSON"
+        }
+      };
+    }
+
+    if (!response.ok) {
+      const failure = normalizeFailure(provider, payload, `Karrio status request failed with ${response.status}`);
+      return {
+        success: false,
+        provider,
+        rawPayload: failure.rawPayload,
+        failureCode: failure.failureCode,
+        failureMessage: failure.failureMessage
+      };
+    }
+
+    const trackerPayload =
+      ((payload as { data?: unknown; tracker?: unknown })?.tracker ??
+        (payload as { data?: unknown })?.data ??
+        payload) as unknown;
+
+    return normalizeStatusSuccess(provider, trackerPayload, this.options.providerName);
   }
 }

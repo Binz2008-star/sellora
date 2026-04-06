@@ -8,6 +8,8 @@ import type {
 import type {
   ShipmentBookingRequest,
   ShipmentBookingResult,
+  ShipmentStatusRequest,
+  ShipmentStatusResult,
   ShippingGateway
 } from "../../src/ports/shipping-gateway.js";
 
@@ -62,6 +64,10 @@ class FakeShippingGateway implements ShippingGateway {
     this.calls.push(request);
     return this.result;
   }
+
+  async getShipmentStatus(_request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
+    throw new Error("not used");
+  }
 }
 
 class FailingShippingGateway implements ShippingGateway {
@@ -75,6 +81,10 @@ class FailingShippingGateway implements ShippingGateway {
         error: "gateway unavailable"
       }
     };
+  }
+
+  async getShipmentStatus(_request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
+    throw new Error("not used");
   }
 }
 

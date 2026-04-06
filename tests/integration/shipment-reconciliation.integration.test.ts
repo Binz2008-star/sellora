@@ -2,10 +2,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../../src/core/db/prisma.js";
 import { MemoryEventBus } from "../../src/adapters/memory/memory-event-bus.js";
 import { PrismaFulfillmentRepository } from "../../src/adapters/prisma/fulfillment.repository.js";
+import { PrismaShippingWebhookRepository } from "../../src/adapters/prisma/shipping-webhook.repository.js";
 import { PrismaOrderLifecycleRepository } from "../../src/adapters/prisma/order-lifecycle.repository.js";
-import { BookOrderShipmentService } from "../../src/application/orders/book-order-shipment.service.js";
+import { ConfirmOrderDeliveryService } from "../../src/application/orders/confirm-order-delivery.service.js";
 import { TransitionOrderService } from "../../src/application/orders/transition-order.service.js";
+import { HandleShippingWebhookService } from "../../src/application/fulfillment/handle-shipping-webhook.service.js";
+import { ReconcileShipmentStatusService } from "../../src/application/fulfillment/reconcile-shipment-status.service.js";
 import type {
+  ShipmentBookingRequest,
   ShipmentBookingResult,
   ShipmentStatusRequest,
   ShipmentStatusResult,
@@ -24,6 +28,7 @@ function nextId(prefix: string): string {
 async function cleanupDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
+      "ShippingWebhookReceipt",
       "OrderEvent",
       "PaymentAttempt",
       "FulfillmentRecord",
@@ -58,11 +63,11 @@ async function cleanupDatabase() {
   `);
 }
 
-async function createPackingOrderFixture() {
+async function createFixture(orderStatus: "SHIPPED" | "DELIVERED" = "SHIPPED") {
   const user = await prisma.user.create({
     data: {
       email: `${nextId("owner")}@sellora.test`,
-      fullName: "Sellora Test Owner",
+      fullName: "Reconciliation Owner",
       passwordHash: "hashed"
     }
   });
@@ -71,14 +76,14 @@ async function createPackingOrderFixture() {
     data: {
       ownerUserId: user.id,
       slug: nextId("seller"),
-      displayName: "Sellora Test Seller"
+      displayName: "Reconciliation Seller"
     }
   });
 
   const customer = await prisma.customer.create({
     data: {
       sellerId: seller.id,
-      name: "Fulfillment Customer",
+      name: "Reconciliation Customer",
       phone: nextId("phone"),
       city: "Dubai"
     }
@@ -98,7 +103,7 @@ async function createPackingOrderFixture() {
       sellerId: seller.id,
       categoryTemplateId: categoryTemplate.id,
       slug: nextId("product"),
-      title: "Booking Test Device",
+      title: "Reconciliation Device",
       status: "ACTIVE",
       attributesJson: {}
     }
@@ -124,7 +129,7 @@ async function createPackingOrderFixture() {
       customerId: customer.id,
       orderNumber: nextId("SOR"),
       mode: "STANDARD",
-      status: "PACKING",
+      status: orderStatus,
       paymentPolicy: "FULL_UPFRONT",
       paymentStatus: "PAID",
       subtotalMinor: 10000,
@@ -134,7 +139,7 @@ async function createPackingOrderFixture() {
         create: {
           productId: product.id,
           productOfferingId: offering.id,
-          titleSnapshot: "Booking Test Device",
+          titleSnapshot: "Reconciliation Device",
           quantity: 1,
           unitPriceMinor: 10000,
           costPriceMinor: 7000,
@@ -146,14 +151,15 @@ async function createPackingOrderFixture() {
     }
   });
 
-  await prisma.inventoryMovement.create({
+  await prisma.fulfillmentRecord.create({
     data: {
       sellerId: seller.id,
-      productOfferingId: offering.id,
-      type: "RESERVE",
-      quantity: 1,
-      referenceType: "order",
-      referenceId: order.id
+      orderId: order.id,
+      status: orderStatus === "DELIVERED" ? "DELIVERED" : "SHIPPED",
+      bookingReference: "ship_ref_1",
+      courierName: "karrio",
+      trackingNumber: "TRK-1",
+      providerStatus: orderStatus === "DELIVERED" ? "delivered" : null
     }
   });
 
@@ -162,63 +168,48 @@ async function createPackingOrderFixture() {
   };
 }
 
-class SuccessfulGateway implements ShippingGateway {
-  async bookShipment(): Promise<ShipmentBookingResult> {
-    return {
-      success: true,
-      provider: "karrio",
-      providerReference: "shp_live_1",
-      bookingReference: "shp_live_1",
-      trackingNumber: "TRK-LIVE-1",
-      trackingUrl: "https://track.example/TRK-LIVE-1",
-      courierName: "karrio-carrier",
-      rawPayload: {
-        id: "shp_live_1",
-        tracking_number: "TRK-LIVE-1",
-        tracking_url: "https://track.example/TRK-LIVE-1"
-      }
-    };
+class FakeShippingGateway implements ShippingGateway {
+  statusCalls: ShipmentStatusRequest[] = [];
+
+  constructor(private readonly statusResult: ShipmentStatusResult) {}
+
+  async bookShipment(_request: ShipmentBookingRequest): Promise<ShipmentBookingResult> {
+    throw new Error("not used");
   }
 
-  async getShipmentStatus(_request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
-    throw new Error("not used");
+  async getShipmentStatus(request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
+    this.statusCalls.push(request);
+    return this.statusResult;
   }
 }
 
-class FailedGateway implements ShippingGateway {
-  async bookShipment(): Promise<ShipmentBookingResult> {
-    return {
-      success: false,
-      provider: "karrio",
-      failureCode: "provider_error",
-      failureMessage: "carrier rejected shipment",
-      rawPayload: {
-        error: "carrier rejected shipment"
-      }
-    };
-  }
-
-  async getShipmentStatus(_request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
-    throw new Error("not used");
-  }
-}
-
-function createServices(shippingGateway: ShippingGateway) {
+function createReconciliationServices(gateway: ShippingGateway) {
   const eventBus = new MemoryEventBus();
+  const fulfillmentRepository = new PrismaFulfillmentRepository();
   const transitionOrderService = new TransitionOrderService(
     new PrismaOrderLifecycleRepository(),
     eventBus
   );
-  const service = new BookOrderShipmentService(
-    new PrismaFulfillmentRepository(),
-    shippingGateway,
+  const confirmOrderDeliveryService = new ConfirmOrderDeliveryService(
+    fulfillmentRepository,
     transitionOrderService
+  );
+  const handleShippingWebhookService = new HandleShippingWebhookService(
+    new PrismaShippingWebhookRepository(),
+    fulfillmentRepository,
+    confirmOrderDeliveryService,
+    eventBus
+  );
+  const service = new ReconcileShipmentStatusService(
+    fulfillmentRepository,
+    gateway,
+    handleShippingWebhookService
   );
 
   return { eventBus, service };
 }
 
-describeIfDatabase("Fulfillment booking DB integration", () => {
+describeIfDatabase("Shipment reconciliation DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });
@@ -233,12 +224,29 @@ describeIfDatabase("Fulfillment booking DB integration", () => {
   });
 
   it(
-    "persists normalized tracking data and raw payload after successful booking",
+    "recovers a missed delivered webhook through reconciliation",
     async () => {
-      const fixture = await createPackingOrderFixture();
-      const { service, eventBus } = createServices(new SuccessfulGateway());
+      const fixture = await createFixture("SHIPPED");
+      const gateway = new FakeShippingGateway({
+        success: true,
+        provider: "karrio",
+        providerReference: "ship_ref_1",
+        trackingNumber: "TRK-1",
+        normalizedStatus: "delivered",
+        observedAt: "2026-04-06T00:00:00.000Z",
+        rawPayload: {
+          id: "ship_ref_1",
+          tracking_number: "TRK-1",
+          status: "delivered",
+          updated_at: "2026-04-06T00:00:00.000Z"
+        }
+      });
+      const { eventBus, service } = createReconciliationServices(gateway);
 
-      await service.execute({
+      const first = await service.execute({
+        orderId: fixture.orderId
+      });
+      const second = await service.execute({
         orderId: fixture.orderId
       });
 
@@ -248,45 +256,50 @@ describeIfDatabase("Fulfillment booking DB integration", () => {
       const fulfillment = await prisma.fulfillmentRecord.findUniqueOrThrow({
         where: { orderId: fixture.orderId }
       });
+      const receipts = await prisma.shippingWebhookReceipt.findMany();
 
-      expect(order.status).toBe("SHIPPED");
-      expect(fulfillment.bookingReference).toBe("shp_live_1");
-      expect(fulfillment.courierName).toBe("karrio-carrier");
-      expect(fulfillment.trackingNumber).toBe("TRK-LIVE-1");
-      expect(fulfillment.trackingUrl).toBe("https://track.example/TRK-LIVE-1");
-      expect(fulfillment.rawPayloadJson).toEqual({
-        id: "shp_live_1",
-        tracking_number: "TRK-LIVE-1",
-        tracking_url: "https://track.example/TRK-LIVE-1"
-      });
+      expect(first.duplicate).toBe(false);
+      expect(first.deliveredHandoff).toBe(true);
+      expect(second.duplicate).toBe(true);
+      expect(second.noChange).toBe(true);
+      expect(order.status).toBe("DELIVERED");
+      expect(fulfillment.providerStatus).toBe("delivered");
+      expect(receipts).toHaveLength(1);
+      expect(gateway.statusCalls).toHaveLength(1);
       expect(eventBus.events.filter((event) => event.eventType === "order_status_changed")).toHaveLength(1);
-      expect(eventBus.events.filter((event) => event.eventType === "fulfillment_status_changed")).toHaveLength(1);
     },
     30000
   );
 
   it(
-    "does not mark order as shipped when provider booking fails",
+    "no-ops already-synced delivered shipments without querying provider again",
     async () => {
-      const fixture = await createPackingOrderFixture();
-      const { service, eventBus } = createServices(new FailedGateway());
-
-      await expect(
-        service.execute({
-          orderId: fixture.orderId
-        })
-      ).rejects.toThrow("carrier rejected shipment");
-
-      const order = await prisma.order.findUniqueOrThrow({
-        where: { id: fixture.orderId }
+      const fixture = await createFixture("DELIVERED");
+      const gateway = new FakeShippingGateway({
+        success: true,
+        provider: "karrio",
+        providerReference: "ship_ref_1",
+        trackingNumber: "TRK-1",
+        normalizedStatus: "delivered",
+        observedAt: "2026-04-06T00:00:00.000Z",
+        rawPayload: {
+          id: "ship_ref_1",
+          tracking_number: "TRK-1",
+          status: "delivered"
+        }
       });
-      const fulfillment = await prisma.fulfillmentRecord.findUnique({
-        where: { orderId: fixture.orderId }
+      const { service } = createReconciliationServices(gateway);
+
+      const result = await service.execute({
+        orderId: fixture.orderId
       });
 
-      expect(order.status).toBe("PACKING");
-      expect(fulfillment).toBeNull();
-      expect(eventBus.events).toHaveLength(0);
+      const receipts = await prisma.shippingWebhookReceipt.findMany();
+
+      expect(result.duplicate).toBe(true);
+      expect(result.noChange).toBe(true);
+      expect(gateway.statusCalls).toHaveLength(0);
+      expect(receipts).toHaveLength(0);
     },
     30000
   );
