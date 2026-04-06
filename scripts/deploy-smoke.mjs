@@ -7,7 +7,7 @@ const RECONCILE_ORDER_ID = process.env.SMOKE_ORDER_ID || process.argv[4];
 if (!BASE_URL) {
   console.error(
     "Usage: node scripts/deploy-smoke.mjs <BASE_URL> [OPERATOR_TOKEN] [ORDER_ID]\n" +
-      "  or set SMOKE_BASE_URL, SELLORA_OPERATOR_TOKEN, SMOKE_ORDER_ID env vars"
+    "  or set SMOKE_BASE_URL, SELLORA_OPERATOR_TOKEN, SMOKE_ORDER_ID env vars"
   );
   process.exit(1);
 }
@@ -26,15 +26,24 @@ async function gate(name, fn) {
   }
 }
 
+async function safeParse(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
 async function run() {
   console.log(`\n🔍 Deploy smoke — ${BASE_URL}\n`);
 
   // Gate 1: /health
   await gate("/health", async () => {
     const res = await fetch(`${BASE_URL}/health`);
-    const body = await res.json();
+    const body = await safeParse(res);
     return {
-      pass: res.ok && body.status === "ok",
+      pass: res.ok && typeof body === "object" && body.status === "ok",
       status: res.status,
       detail: body
     };
@@ -43,9 +52,9 @@ async function run() {
   // Gate 2: /ready
   await gate("/ready", async () => {
     const res = await fetch(`${BASE_URL}/ready`);
-    const body = await res.json();
+    const body = await safeParse(res);
     return {
-      pass: res.ok && body.status === "ready",
+      pass: res.ok && typeof body === "object" && body.status === "ready",
       status: res.status,
       detail: body
     };
@@ -62,7 +71,7 @@ async function run() {
         },
         body: JSON.stringify({ orderId: RECONCILE_ORDER_ID })
       });
-      const body = await res.json();
+      const body = await safeParse(res);
       return {
         pass: res.ok,
         status: res.status,
@@ -99,7 +108,7 @@ async function run() {
   // Reminder for manual gate
   console.log("⚠️  Manual gate: verify clean startup logs in Render dashboard\n");
 
-  process.exit(exitCode);
+  process.exitCode = exitCode;
 }
 
 run();
