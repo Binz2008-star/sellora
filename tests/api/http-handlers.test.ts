@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSelloraHttpHandlers } from "../../src/api/http/handlers.js";
 import type { NotificationLog } from "../../src/domain/notifications/notification.js";
 import type { HttpAccessRepository } from "../../src/ports/http-access-repository.js";
+import type { CreateTenantResult } from "../../src/ports/tenant-repository.js";
 import type { OperatorNotificationSummary } from "../../src/ports/notification-query-repository.js";
 import type {
   OperatorOrderDetail,
@@ -111,6 +112,29 @@ class FakeHealthCheckService {
     status: "ready" as const,
     checks: {
       database: "ok" as const
+    }
+  }));
+}
+
+class FakeCreateTenantService {
+  execute = vi.fn(async (): Promise<CreateTenantResult> => ({
+    user: {
+      id: "user_1",
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      isActive: true,
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z"
+    },
+    seller: {
+      id: "seller_1",
+      ownerUserId: "user_1",
+      slug: "seller-one",
+      displayName: "Seller One",
+      status: "active",
+      defaultCurrency: "AED",
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z"
     }
   }));
 }
@@ -349,6 +373,7 @@ function sign(body: string, secret: string): string {
 function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAccessRepository()) {
   const paymentService = new FakePaymentService();
   const healthCheckService = new FakeHealthCheckService();
+  const createTenantService = new FakeCreateTenantService();
   const bookOrderShipmentService = new FakeBookOrderShipmentService();
   const confirmOrderDeliveryService = new FakeConfirmOrderDeliveryService();
   const handleShippingWebhookService = new FakeHandleShippingWebhookService();
@@ -361,6 +386,7 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     accessRepository,
     operatorQueryRepository,
     notificationQueryRepository,
+    createTenantService,
     acknowledgeNotificationService,
     healthCheckService,
     paymentService,
@@ -376,6 +402,7 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
   return {
     handlers,
     healthCheckService,
+    createTenantService,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -411,7 +438,7 @@ describe("Sellora HTTP handlers", () => {
   });
 
   it("rejects unauthorized operator calls before service execution", async () => {
-    const { handlers, paymentService } = createHandlers();
+    const { handlers, paymentService, createTenantService } = createHandlers();
     const response = await handlers.initiatePayment(
       buildRequest("/api/payments/attempts", {
         json: {
@@ -425,6 +452,36 @@ describe("Sellora HTTP handlers", () => {
 
     expect(response.status).toBe(401);
     expect(paymentService.initiatePaymentAttempt).not.toHaveBeenCalled();
+    expect(createTenantService.execute).not.toHaveBeenCalled();
+  });
+
+  it("creates a tenant through the admin route without seller scoping headers", async () => {
+    const { handlers, createTenantService } = createHandlers();
+
+    const response = await handlers.createTenant(
+      buildRequest("/api/admin/tenants", {
+        headers: {
+          authorization: "Bearer operator-secret"
+        },
+        json: {
+          email: "seller@sellora.test",
+          fullName: "Seller One",
+          brandName: "Seller One",
+          slug: "seller-one",
+          whatsappNumber: "+971500000001"
+        }
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(createTenantService.execute).toHaveBeenCalledWith({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller One",
+      slug: "seller-one",
+      whatsappNumber: "+971500000001"
+    });
+    expect((await response.json()).tenant.seller.slug).toBe("seller-one");
   });
 
   it("rejects invalid body payloads with validation errors", async () => {

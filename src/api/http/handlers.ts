@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handleKarrioWebhookRequest } from "../../application/fulfillment/handle-karrio-webhook.request.js";
+import type { CreateTenantService } from "../../application/tenancy/create-tenant.service.js";
 import type { AcknowledgeNotificationService } from "../../application/notifications/acknowledge-notification.service.js";
 import type { BookOrderShipmentService } from "../../application/orders/book-order-shipment.service.js";
 import type { ConfirmOrderDeliveryService } from "../../application/orders/confirm-order-delivery.service.js";
@@ -14,6 +15,7 @@ import type { OperatorQueryRepository } from "../../ports/operator-query-reposit
 import {
   authorizeNotificationAccess,
   authorizeOrderAccess,
+  requireAdminAuth,
   requireOperatorAuth
 } from "./auth.js";
 import { HttpError, mapErrorToHttpError } from "./errors.js";
@@ -65,6 +67,15 @@ const notificationListQuerySchema = z.object({
   acknowledged: z.enum(["true", "false"]).optional()
 });
 
+const createTenantSchema = z.object({
+  email: z.string().email(),
+  fullName: z.string().trim().min(1),
+  brandName: z.string().trim().min(1),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  whatsappNumber: z.string().trim().min(1).optional(),
+  currency: z.string().trim().min(3).max(3).optional()
+});
+
 type OrderPathParams = z.infer<typeof orderPathParamsSchema>;
 type NotificationPathParams = z.infer<typeof notificationPathParamsSchema>;
 
@@ -72,6 +83,7 @@ export interface SelloraHttpHandlerDependencies {
   accessRepository: HttpAccessRepository;
   operatorQueryRepository: OperatorQueryRepository;
   notificationQueryRepository: NotificationQueryRepository;
+  createTenantService: Pick<CreateTenantService, "execute">;
   acknowledgeNotificationService: Pick<AcknowledgeNotificationService, "execute">;
   healthCheckService: Pick<HealthCheckService, "getHealth" | "getReadiness">;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
@@ -87,6 +99,7 @@ export interface SelloraHttpHandlerDependencies {
 export const SELLORA_HTTP_ENDPOINTS = {
   health: "/health",
   readiness: "/ready",
+  createTenant: "/api/admin/tenants",
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
   listNotifications: "/api/notifications",
@@ -148,6 +161,17 @@ export function createSelloraHttpHandlers(
       withHttpBoundary(SELLORA_HTTP_ENDPOINTS.readiness, async () => {
         const readiness = await dependencies.healthCheckService.getReadiness();
         return jsonResponse(readiness.status === "ready" ? 200 : 503, readiness);
+      }),
+
+    createTenant: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.createTenant, async () => {
+        requireAdminAuth(request, dependencies.operatorApiToken);
+        const body = await parseJsonBody(request, createTenantSchema);
+        const result = await dependencies.createTenantService.execute(body);
+
+        return jsonResponse(201, {
+          tenant: result
+        });
       }),
 
     initiatePayment: (request: Request) =>

@@ -1,0 +1,73 @@
+import { describe, expect, it, vi } from "vitest";
+import { CreateTenantService } from "../../src/application/tenancy/create-tenant.service.js";
+import type { CreateTenantResult, TenantRepository } from "../../src/ports/tenant-repository.js";
+
+class FakeTenantRepository implements TenantRepository {
+  createTenant = vi.fn(async (input) => ({
+    user: {
+      id: "user_1",
+      email: input.email,
+      fullName: input.fullName,
+      isActive: true,
+      createdAt: "2026-04-07T00:00:00.000Z",
+      updatedAt: "2026-04-07T00:00:00.000Z"
+    },
+    seller: {
+      id: "seller_1",
+      ownerUserId: "user_1",
+      slug: input.slug,
+      displayName: input.brandName,
+      status: "active" as const,
+      defaultCurrency: input.currency ?? "AED",
+      createdAt: "2026-04-07T00:00:00.000Z",
+      updatedAt: "2026-04-07T00:00:00.000Z"
+    }
+  } satisfies CreateTenantResult));
+}
+
+describe("CreateTenantService", () => {
+  it("normalizes tenant input before persisting", async () => {
+    const repository = new FakeTenantRepository();
+    const service = new CreateTenantService(repository);
+
+    const result = await service.execute({
+      email: " Seller@Sellora.Test ",
+      fullName: " Seller One ",
+      brandName: " Seller Brand ",
+      slug: " Seller-One ",
+      whatsappNumber: " +971500000001 ",
+      currency: " usd "
+    });
+
+    expect(repository.createTenant).toHaveBeenCalledWith({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller Brand",
+      slug: "seller-one",
+      whatsappNumber: "+971500000001",
+      currency: "USD"
+    });
+    expect(result.seller.defaultCurrency).toBe("USD");
+  });
+
+  it("defaults tenant currency to AED when omitted", async () => {
+    const repository = new FakeTenantRepository();
+    const service = new CreateTenantService(repository);
+
+    await service.execute({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller Brand",
+      slug: "seller-one"
+    });
+
+    expect(repository.createTenant).toHaveBeenCalledWith({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller Brand",
+      slug: "seller-one",
+      whatsappNumber: undefined,
+      currency: "AED"
+    });
+  });
+});

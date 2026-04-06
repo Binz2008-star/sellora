@@ -10,10 +10,12 @@ import { PrismaPaymentRepository } from "./adapters/prisma/payment.repository.js
 import { PrismaFulfillmentRepository } from "./adapters/prisma/fulfillment.repository.js";
 import { PrismaShippingWebhookRepository } from "./adapters/prisma/shipping-webhook.repository.js";
 import { PrismaOrderLifecycleRepository } from "./adapters/prisma/order-lifecycle.repository.js";
+import { PrismaTenantRepository } from "./adapters/prisma/tenant.repository.js";
 import { AcknowledgeNotificationService } from "./application/notifications/acknowledge-notification.service.js";
 import { SendOrderNotificationService } from "./application/notifications/send-order-notification.service.js";
 import { HealthCheckService } from "./application/operations/health-check.service.js";
 import { PaymentService } from "./application/payments/payment.service.js";
+import { CreateTenantService } from "./application/tenancy/create-tenant.service.js";
 import { TransitionOrderService } from "./application/orders/transition-order.service.js";
 import { BookOrderShipmentService } from "./application/orders/book-order-shipment.service.js";
 import { ConfirmOrderDeliveryService } from "./application/orders/confirm-order-delivery.service.js";
@@ -86,6 +88,12 @@ function createRoutes(handlers: ReturnType<typeof createSelloraHttpHandlers>): R
       pattern: /^\/ready$/,
       buildParams: () => ({}),
       handle: () => handlers.readiness()
+    },
+    {
+      method: "POST",
+      pattern: /^\/api\/admin\/tenants$/,
+      buildParams: () => ({}),
+      handle: (request) => handlers.createTenant(request)
     },
     {
       method: "POST",
@@ -197,6 +205,7 @@ const handlers = createSelloraHttpHandlers({
   accessRepository: new PrismaHttpAccessRepository(),
   operatorQueryRepository: new PrismaOperatorQueryRepository(),
   notificationQueryRepository: new PrismaNotificationQueryRepository(),
+  createTenantService: new CreateTenantService(new PrismaTenantRepository()),
   acknowledgeNotificationService: new AcknowledgeNotificationService(notificationRepository),
   healthCheckService: new HealthCheckService(config, async () => {
     await prisma.$queryRaw`SELECT 1`;

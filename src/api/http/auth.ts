@@ -5,10 +5,7 @@ export interface OperatorAuthContext {
   sellerId: string;
 }
 
-export function requireOperatorAuth(
-  request: Request,
-  operatorApiToken?: string
-): OperatorAuthContext {
+function requireBearerToken(request: Request, operatorApiToken?: string): void {
   if (!operatorApiToken) {
     throw new HttpError(503, "operator_auth_unconfigured", "Operator API token is not configured");
   }
@@ -22,6 +19,17 @@ export function requireOperatorAuth(
   if (token !== operatorApiToken) {
     throw new HttpError(401, "unauthorized", "Invalid bearer token");
   }
+}
+
+export function requireAdminAuth(request: Request, operatorApiToken?: string): void {
+  requireBearerToken(request, operatorApiToken);
+}
+
+export function requireOperatorAuth(
+  request: Request,
+  operatorApiToken?: string
+): OperatorAuthContext {
+  requireBearerToken(request, operatorApiToken);
 
   const sellerId = request.headers.get("x-sellora-seller-id")?.trim();
   if (!sellerId) {
