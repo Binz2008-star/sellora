@@ -10,7 +10,7 @@
 
 ## 1. Product Direction
 
-Build Sellora as a multi-tenant trusted commerce platform for sellers who need:
+Build Sellora as a commerce operating kernel for sellers who need:
 
 - storefronts
 - WhatsApp-led selling
@@ -22,6 +22,7 @@ Build Sellora as a multi-tenant trusted commerce platform for sellers who need:
 - Arabic and English localization
 
 This is not an iPhone app. It is a UAE-native commerce core with category extensions and messaging-led operations.
+Automation is a layered capability on top of that core, not the system definition.
 
 ## 2. Product Boundaries
 
@@ -105,6 +106,14 @@ Work:
 
 Deliverable:
 a clean platform codebase with stable domain contracts
+
+Phase 1 success means:
+
+- canonical product and offering model
+- inventory movement ledger
+- authoritative order creation path
+- authoritative order transition path
+- truthful order event trail
 
 ### Phase 2: Legacy Logic Intake
 
@@ -218,14 +227,16 @@ a reusable seller platform instead of a custom project
 
 1. Define core types and bounded contexts.
 2. Define migration map from both legacy apps.
-3. Port order and payment rules into new services.
-4. Add quote, invoice, and messaging contracts.
-5. Add sourcing and AI enrichment contracts.
-6. Add opportunity scoring and autonomous publish contracts.
-7. Add category templates and verification contracts.
-8. Add workflow orchestration and autonomous operations loops.
-9. Implement Makful as tenant one.
-10. Add a second category before calling the architecture stable.
+3. Implement authoritative order creation and inventory reservation.
+4. Implement authoritative order transitions and inventory release/deduct flows.
+5. Port payment rules into new services only after the order lifecycle is stable.
+6. Add quote, invoice, and messaging contracts.
+7. Add sourcing and AI enrichment contracts.
+8. Add opportunity scoring and autonomous publish contracts.
+9. Add category templates and verification contracts.
+10. Add workflow orchestration and autonomous operations loops.
+11. Implement Makful as tenant one.
+12. Add a second category before calling the architecture stable.
 
 ## 8. Success Criteria
 
@@ -233,6 +244,7 @@ a reusable seller platform instead of a custom project
 - Makful runs without owning platform-specific logic
 - phone-only fields do not leak into the generic core
 - orders and payments have one authoritative state machine
+- order lifecycle is authoritative before payment automation is added
 - quotes and messaging can feed the same commerce engine
 - supplier imports can feed draft listings without bypassing review
 - opportunity scoring can rank products before catalog publication

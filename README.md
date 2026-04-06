@@ -1,6 +1,6 @@
 # Sellora
 
-Sellora is a clean-slate autonomous commerce platform for UAE social sellers, verified resale, quote-to-order businesses, and AI-assisted supplier-driven catalog building.
+Sellora is being built as a commerce operating kernel with authoritative domain truth, inventory-ledger discipline, and policy-governed automation layered on top.
 
 ## Why A New Repo
 
@@ -13,7 +13,7 @@ Those repos contain useful business logic and production learnings, but they als
 
 ## Product Goal
 
-Build a platform where any seller can:
+Build a backend-first commerce core that can later support seller-facing products such as:
 
 - manage a catalog
 - sell through WhatsApp-led and storefront-led journeys
@@ -23,8 +23,7 @@ Build a platform where any seller can:
 - sell through branded storefronts or operator dashboards
 - operate in Arabic and English without bolted-on localization
 - import supplier products into draft listings with AI enrichment
-- discover profitable product opportunities across multiple source types
-- operate autonomous sourcing, listing, sales, and fulfillment loops
+- layer policy-governed automation on top of clean commerce truth
 
 ## Market Position
 
@@ -42,7 +41,9 @@ It is being shaped as a UAE-native commerce operating system with:
 
 - multi-tenant seller model
 - category-agnostic catalog
-- order and payment lifecycle
+- authoritative order creation and order lifecycle
+- inventory ledger and stock reservation discipline
+- payment lifecycle
 - shipment and fulfillment hooks
 - verification templates by category
 - migration path from the legacy apps
@@ -88,7 +89,8 @@ The repo now includes:
 - environment validation in `src/core/config.ts`
 - Prisma client wiring in `src/core/db/prisma.ts`
 - category template registry in `src/modules/catalog`
-- order transition service in `src/modules/orders`
+- order state machine and inventory ledger modules in `src/modules/orders`
+- authoritative order creation service and Prisma checkout repository
 - quote and messaging starter domains
 - UAE market profile scaffolding
 - supplier sourcing and AI enrichment starter domains
@@ -101,7 +103,7 @@ The repo now includes:
 
 ## Next Build Steps
 
-1. Install dependencies.
-2. Generate the Prisma client.
-3. Create the first application service layer around sellers, catalog, orders, quotes, messaging, and sourcing.
-4. Port proven logic from the legacy repos into the new modules.
+1. Implement the authoritative order transition service.
+2. Add cancel -> release inventory and fulfill -> deduct inventory flows.
+3. Add truthful order events and idempotency checks around the order lifecycle.
+4. Add payment core only after the order lifecycle is complete.

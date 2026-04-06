@@ -4,13 +4,13 @@
 
 Sellora is not a generic ecommerce platform.
 
-Sellora is an autonomous commerce kernel for an owner-operator business that can later become a platform.
+Sellora is being built as a commerce operating kernel for an owner-operator business that can later become a platform.
 
 ## Locked Priorities
 
 1. Revenue before breadth
 2. Clean commerce kernel before category expansion
-3. Autonomous workflows before seller-facing SaaS polish
+3. Authoritative commerce truth before autonomy breadth
 4. One working money loop before many integrations
 5. Policy-driven autonomy before unrestricted AI behavior
 
@@ -44,8 +44,8 @@ The first version succeeds when Sellora can:
 1. discover a product candidate
 2. estimate economics
 3. publish a listing under policy
-4. capture an order
-5. complete payment and fulfillment
+4. capture an order through one authoritative order path
+5. execute the order lifecycle cleanly through fulfillment
 6. measure profit after delivery
 
 ## What We Are Not Building First
@@ -62,6 +62,7 @@ The first version succeeds when Sellora can:
 Every new feature must strengthen one of these:
 
 - commerce truth
+- mutation discipline
 - autonomy truth
 - speed to revenue
 - safe automation
