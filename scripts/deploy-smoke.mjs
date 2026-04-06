@@ -2,12 +2,13 @@
 
 const BASE_URL = process.env.SMOKE_BASE_URL || process.argv[2];
 const OPERATOR_TOKEN = process.env.SELLORA_OPERATOR_TOKEN || process.argv[3];
-const RECONCILE_ORDER_ID = process.env.SMOKE_ORDER_ID || process.argv[4];
+const SELLER_ID = process.env.SMOKE_SELLER_ID || process.argv[4];
+const RECONCILE_ORDER_ID = process.env.SMOKE_ORDER_ID || process.argv[5];
 
 if (!BASE_URL) {
   console.error(
-    "Usage: node scripts/deploy-smoke.mjs <BASE_URL> [OPERATOR_TOKEN] [ORDER_ID]\n" +
-    "  or set SMOKE_BASE_URL, SELLORA_OPERATOR_TOKEN, SMOKE_ORDER_ID env vars"
+    "Usage: node scripts/deploy-smoke.mjs <BASE_URL> [OPERATOR_TOKEN] [SELLER_ID] [ORDER_ID]\n" +
+    "  or set SMOKE_BASE_URL, SELLORA_OPERATOR_TOKEN, SMOKE_SELLER_ID, SMOKE_ORDER_ID env vars"
   );
   process.exit(1);
 }
@@ -61,13 +62,14 @@ async function run() {
   });
 
   // Gate 3: reconcile smoke (optional — needs token + orderId)
-  if (OPERATOR_TOKEN && RECONCILE_ORDER_ID) {
+  if (OPERATOR_TOKEN && SELLER_ID && RECONCILE_ORDER_ID) {
     await gate("reconcile smoke", async () => {
       const res = await fetch(`${BASE_URL}/api/fulfillment/shipments/reconcile`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${OPERATOR_TOKEN}`
+          Authorization: `Bearer ${OPERATOR_TOKEN}`,
+          "x-sellora-seller-id": SELLER_ID
         },
         body: JSON.stringify({ orderId: RECONCILE_ORDER_ID })
       });
@@ -83,7 +85,7 @@ async function run() {
       name: "reconcile smoke",
       pass: true,
       status: "skipped",
-      detail: "Set SELLORA_OPERATOR_TOKEN + SMOKE_ORDER_ID to enable"
+      detail: "Set SELLORA_OPERATOR_TOKEN + SMOKE_SELLER_ID + SMOKE_ORDER_ID to enable"
     });
   }
 
