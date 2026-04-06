@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handleKarrioWebhookRequest } from "../../application/fulfillment/handle-karrio-webhook.request.js";
+import type { AcknowledgeNotificationService } from "../../application/notifications/acknowledge-notification.service.js";
 import type { BookOrderShipmentService } from "../../application/orders/book-order-shipment.service.js";
 import type { ConfirmOrderDeliveryService } from "../../application/orders/confirm-order-delivery.service.js";
 import type { ReconcileShipmentStatusService } from "../../application/fulfillment/reconcile-shipment-status.service.js";
@@ -7,8 +8,13 @@ import type { HandleShippingWebhookService } from "../../application/fulfillment
 import type { PaymentService } from "../../application/payments/payment.service.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type { HttpAccessRepository } from "../../ports/http-access-repository.js";
+import type { NotificationQueryRepository } from "../../ports/notification-query-repository.js";
 import type { OperatorQueryRepository } from "../../ports/operator-query-repository.js";
-import { authorizeOrderAccess, requireOperatorAuth } from "./auth.js";
+import {
+  authorizeNotificationAccess,
+  authorizeOrderAccess,
+  requireOperatorAuth
+} from "./auth.js";
 import { HttpError, mapErrorToHttpError } from "./errors.js";
 import { jsonResponse, parseJsonBody } from "./json.js";
 import { logHttpEvent } from "./logging.js";
@@ -49,11 +55,23 @@ const orderPathParamsSchema = z.object({
   orderId: z.string().min(1)
 });
 
+const notificationPathParamsSchema = z.object({
+  notificationId: z.string().min(1)
+});
+
+const notificationListQuerySchema = z.object({
+  status: z.enum(["pending", "sent", "failed"]).optional(),
+  acknowledged: z.enum(["true", "false"]).optional()
+});
+
 type OrderPathParams = z.infer<typeof orderPathParamsSchema>;
+type NotificationPathParams = z.infer<typeof notificationPathParamsSchema>;
 
 export interface SelloraHttpHandlerDependencies {
   accessRepository: HttpAccessRepository;
   operatorQueryRepository: OperatorQueryRepository;
+  notificationQueryRepository: NotificationQueryRepository;
+  acknowledgeNotificationService: Pick<AcknowledgeNotificationService, "execute">;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
   bookOrderShipmentService: Pick<BookOrderShipmentService, "execute">;
   confirmOrderDeliveryService: Pick<ConfirmOrderDeliveryService, "execute">;
@@ -67,6 +85,9 @@ export interface SelloraHttpHandlerDependencies {
 export const SELLORA_HTTP_ENDPOINTS = {
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
+  listNotifications: "/api/notifications",
+  getNotification: "/api/notifications/:notificationId",
+  acknowledgeNotification: "/api/notifications/:notificationId/acknowledge",
   getOrder: "/api/orders/:orderId",
   getOrderPayments: "/api/orders/:orderId/payments",
   getOrderFulfillment: "/api/orders/:orderId/fulfillment",
@@ -110,6 +131,8 @@ export function createSelloraHttpHandlers(
   dependencies: SelloraHttpHandlerDependencies
 ) {
   const requireOrderParams = (params: unknown): OrderPathParams => orderPathParamsSchema.parse(params);
+  const requireNotificationParams = (params: unknown): NotificationPathParams =>
+    notificationPathParamsSchema.parse(params);
 
   return {
     initiatePayment: (request: Request) =>
@@ -188,6 +211,69 @@ export function createSelloraHttpHandlers(
         return jsonResponse(200, {
           paymentAttempt: result.attempt,
           order: result.order
+        });
+      }),
+
+    listNotifications: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.listNotifications, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const url = new URL(request.url);
+        const query = notificationListQuerySchema.parse({
+          status: url.searchParams.get("status") ?? undefined,
+          acknowledged: url.searchParams.get("acknowledged") ?? undefined
+        });
+
+        const notifications = await dependencies.notificationQueryRepository.listNotifications({
+          sellerId: actor.sellerId,
+          status: query.status,
+          acknowledged:
+            query.acknowledged === undefined ? undefined : query.acknowledged === "true"
+        });
+
+        return jsonResponse(200, {
+          notifications
+        });
+      }),
+
+    getNotification: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getNotification, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireNotificationParams(params);
+        await authorizeNotificationAccess(
+          dependencies.accessRepository,
+          actor.sellerId,
+          path.notificationId
+        );
+
+        const notification = await dependencies.notificationQueryRepository.getNotificationDetail(
+          path.notificationId
+        );
+        if (!notification) {
+          throw new HttpError(404, "not_found", `Notification not found: ${path.notificationId}`);
+        }
+
+        return jsonResponse(200, {
+          notification
+        });
+      }),
+
+    acknowledgeNotification: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.acknowledgeNotification, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireNotificationParams(params);
+        await authorizeNotificationAccess(
+          dependencies.accessRepository,
+          actor.sellerId,
+          path.notificationId
+        );
+
+        const notification = await dependencies.acknowledgeNotificationService.execute({
+          notificationId: path.notificationId,
+          sellerId: actor.sellerId
+        });
+
+        return jsonResponse(200, {
+          notification
         });
       }),
 

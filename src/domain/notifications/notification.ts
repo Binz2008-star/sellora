@@ -26,4 +26,6 @@ export interface NotificationLog extends AuditStamp {
   providerPayload?: KeyValueRecord;
   failureMessage?: string;
   dispatchedAt?: string;
+  acknowledgedAt?: string;
+  acknowledgedBySellerId?: string;
 }

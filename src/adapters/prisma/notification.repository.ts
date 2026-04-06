@@ -27,6 +27,8 @@ type NotificationLogRecord = {
   providerPayloadJson: unknown;
   failureMessage: string | null;
   dispatchedAt: Date | null;
+  acknowledgedAt: Date | null;
+  acknowledgedBySellerId: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -50,6 +52,8 @@ function mapNotificationLog(record: NotificationLogRecord): NotificationLog {
     providerPayload: (record.providerPayloadJson as KeyValueRecord | null) ?? undefined,
     failureMessage: record.failureMessage ?? undefined,
     dispatchedAt: record.dispatchedAt?.toISOString(),
+    acknowledgedAt: record.acknowledgedAt?.toISOString(),
+    acknowledgedBySellerId: record.acknowledgedBySellerId ?? undefined,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   };
@@ -116,8 +120,11 @@ export class PrismaNotificationRepository implements NotificationRepository {
       };
     } catch (error) {
       if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
+        (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") ||
+        (typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          (error as { code?: string }).code === "P2002")
       ) {
         const existing = await client.notificationLog.findUniqueOrThrow({
           where: { notificationKey: input.notificationKey }
@@ -173,5 +180,33 @@ export class PrismaNotificationRepository implements NotificationRepository {
     });
 
     return mapNotificationLog(record as unknown as NotificationLogRecord);
+  }
+
+  async acknowledge(
+    notificationLogId: string,
+    acknowledgedBySellerId: string
+  ): Promise<NotificationLog | null> {
+    const client = prisma as any;
+    const existing = await client.notificationLog.findUnique({
+      where: { id: notificationLogId }
+    });
+
+    if (!existing) {
+      return null;
+    }
+
+    if (existing.acknowledgedAt) {
+      return mapNotificationLog(existing as NotificationLogRecord);
+    }
+
+    const record = await client.notificationLog.update({
+      where: { id: notificationLogId },
+      data: {
+        acknowledgedAt: new Date(),
+        acknowledgedBySellerId
+      }
+    });
+
+    return mapNotificationLog(record as NotificationLogRecord);
   }
 }

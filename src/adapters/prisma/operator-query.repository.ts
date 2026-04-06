@@ -2,6 +2,7 @@ import { prisma } from "../../core/db/prisma.js";
 import type { FulfillmentRecord, Order, OrderLine } from "../../domain/orders/order.js";
 import type { PaymentAttempt } from "../../domain/payments/payment.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
+import type { OperatorNotificationSummary } from "../../ports/notification-query-repository.js";
 import type {
   OperatorOrderDetail,
   OperatorOrderTimelineEntry,
@@ -75,6 +76,33 @@ type FulfillmentRecordRecord = {
   deliveredAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type NotificationRecord = {
+  id: string;
+  sellerId: string;
+  orderId: string;
+  channel: string;
+  status: string;
+  recipientRole: string;
+  recipientAddress: string;
+  templateKey: string;
+  eventType: string;
+  eventIdempotencyKey: string;
+  notificationKey: string;
+  subject: string;
+  body: string;
+  providerMessageId: string | null;
+  providerPayloadJson: unknown;
+  failureMessage: string | null;
+  dispatchedAt: Date | null;
+  acknowledgedAt: Date | null;
+  acknowledgedBySellerId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  order: {
+    orderNumber: string;
+  };
 };
 
 function mapOrder(record: OrderRecord): Order {
@@ -174,6 +202,33 @@ function mapFulfillment(record: FulfillmentRecordRecord): FulfillmentRecord {
   };
 }
 
+function mapNotification(record: NotificationRecord): OperatorNotificationSummary {
+  return {
+    id: record.id,
+    sellerId: record.sellerId,
+    orderId: record.orderId,
+    orderNumber: record.order.orderNumber,
+    channel: record.channel.toLowerCase() as OperatorNotificationSummary["channel"],
+    status: record.status.toLowerCase() as OperatorNotificationSummary["status"],
+    recipientRole: record.recipientRole.toLowerCase() as OperatorNotificationSummary["recipientRole"],
+    recipientAddress: record.recipientAddress,
+    templateKey: record.templateKey as OperatorNotificationSummary["templateKey"],
+    eventType: record.eventType,
+    eventIdempotencyKey: record.eventIdempotencyKey,
+    notificationKey: record.notificationKey,
+    subject: record.subject,
+    body: record.body,
+    providerMessageId: record.providerMessageId ?? undefined,
+    providerPayload: (record.providerPayloadJson as KeyValueRecord | null) ?? undefined,
+    failureMessage: record.failureMessage ?? undefined,
+    dispatchedAt: record.dispatchedAt?.toISOString(),
+    acknowledgedAt: record.acknowledgedAt?.toISOString(),
+    acknowledgedBySellerId: record.acknowledgedBySellerId ?? undefined,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  };
+}
+
 export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
   async getOrderDetail(orderId: string): Promise<OperatorOrderDetail | null> {
     const record = await prisma.order.findUnique({
@@ -260,5 +315,22 @@ export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString()
     }));
+  }
+
+  async listNotificationsByOrder(orderId: string): Promise<OperatorNotificationSummary[]> {
+    const client = prisma as any;
+    const records = await client.notificationLog.findMany({
+      where: { orderId },
+      include: {
+        order: {
+          select: {
+            orderNumber: true
+          }
+        }
+      },
+      orderBy: [{ createdAt: "desc" }]
+    });
+
+    return records.map((record: NotificationRecord) => mapNotification(record));
   }
 }

@@ -60,3 +60,22 @@ export async function authorizePaymentAttemptAccess(
     throw new HttpError(403, "forbidden", `Payment attempt ${paymentAttemptId} does not belong to seller ${sellerId}`);
   }
 }
+
+export async function authorizeNotificationAccess(
+  accessRepository: HttpAccessRepository,
+  sellerId: string,
+  notificationId: string
+): Promise<void> {
+  const ownerSellerId = await accessRepository.getNotificationSellerId(notificationId);
+  if (!ownerSellerId) {
+    throw new HttpError(404, "not_found", `Notification not found: ${notificationId}`);
+  }
+
+  if (ownerSellerId !== sellerId) {
+    throw new HttpError(
+      403,
+      "forbidden",
+      `Notification ${notificationId} does not belong to seller ${sellerId}`
+    );
+  }
+}

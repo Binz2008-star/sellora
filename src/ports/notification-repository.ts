@@ -54,4 +54,8 @@ export interface NotificationRepository {
       providerPayload?: KeyValueRecord;
     }
   ): Promise<NotificationLog>;
+  acknowledge(
+    notificationLogId: string,
+    acknowledgedBySellerId: string
+  ): Promise<NotificationLog | null>;
 }

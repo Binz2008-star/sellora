@@ -19,4 +19,14 @@ export class PrismaHttpAccessRepository implements HttpAccessRepository {
 
     return attempt?.sellerId ?? null;
   }
+
+  async getNotificationSellerId(notificationId: string): Promise<string | null> {
+    const client = prisma as any;
+    const notification = await client.notificationLog.findUnique({
+      where: { id: notificationId },
+      select: { sellerId: true }
+    });
+
+    return notification?.sellerId ?? null;
+  }
 }

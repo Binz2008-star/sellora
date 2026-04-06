@@ -1,4 +1,5 @@
 import type { Order, OrderLine, FulfillmentRecord } from "../domain/orders/order.js";
+import type { OperatorNotificationSummary } from "./notification-query-repository.js";
 import type { PaymentAttempt } from "../domain/payments/payment.js";
 import type { KeyValueRecord } from "../domain/shared/types.js";
 
@@ -42,4 +43,5 @@ export interface OperatorQueryRepository {
   getFulfillment(orderId: string): Promise<FulfillmentRecord | null>;
   listOrderTimeline(orderId: string): Promise<OperatorOrderTimelineEntry[]>;
   listShippingWebhookReceipts(orderId: string): Promise<OperatorShippingWebhookReceipt[]>;
+  listNotificationsByOrder(orderId: string): Promise<OperatorNotificationSummary[]>;
 }

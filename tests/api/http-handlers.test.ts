@@ -1,7 +1,9 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createSelloraHttpHandlers } from "../../src/api/http/handlers.js";
+import type { NotificationLog } from "../../src/domain/notifications/notification.js";
 import type { HttpAccessRepository } from "../../src/ports/http-access-repository.js";
+import type { OperatorNotificationSummary } from "../../src/ports/notification-query-repository.js";
 import type {
   OperatorOrderDetail,
   OperatorOrderTimelineEntry,
@@ -49,7 +51,8 @@ function makePaymentContext(): PaymentAttemptContext {
 class FakeHttpAccessRepository implements HttpAccessRepository {
   constructor(
     private readonly orderSellerId: string | null = "seller_1",
-    private readonly paymentSellerId: string | null = "seller_1"
+    private readonly paymentSellerId: string | null = "seller_1",
+    private readonly notificationSellerId: string | null = "seller_1"
   ) {}
 
   async getOrderSellerId(): Promise<string | null> {
@@ -58,6 +61,10 @@ class FakeHttpAccessRepository implements HttpAccessRepository {
 
   async getPaymentAttemptSellerId(): Promise<string | null> {
     return this.paymentSellerId;
+  }
+
+  async getNotificationSellerId(): Promise<string | null> {
+    return this.notificationSellerId;
   }
 }
 
@@ -149,6 +156,66 @@ class FakeReconcileShipmentStatusService {
   }));
 }
 
+function makeNotification(
+  overrides: Partial<OperatorNotificationSummary> = {}
+): OperatorNotificationSummary {
+  return {
+    id: "notification_1",
+    sellerId: "seller_1",
+    orderId: "order_1",
+    orderNumber: "SOR-HTTP-1",
+    channel: "email",
+    status: "sent",
+    recipientRole: "customer",
+    recipientAddress: "customer@sellora.test",
+    templateKey: "payment_succeeded",
+    eventType: "payment_succeeded",
+    eventIdempotencyKey: "event_1",
+    notificationKey: "notify_1",
+    subject: "Payment received",
+    body: "Hello",
+    createdAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    ...overrides
+  };
+}
+
+class FakeNotificationQueryRepository {
+  listNotifications = vi.fn(async (): Promise<OperatorNotificationSummary[]> => [
+    makeNotification(),
+    makeNotification({
+      id: "notification_2",
+      status: "failed",
+      recipientRole: "operator",
+      recipientAddress: "owner@sellora.test",
+      templateKey: "shipment_booked",
+      eventType: "order_status_changed",
+      notificationKey: "notify_2",
+      subject: "Shipment issue"
+    })
+  ]);
+
+  getNotificationDetail = vi.fn(async (notificationId: string): Promise<OperatorNotificationSummary | null> => {
+    if (notificationId === "missing") {
+      return null;
+    }
+
+    return makeNotification({
+      id: notificationId
+    });
+  });
+}
+
+class FakeAcknowledgeNotificationService {
+  execute = vi.fn(async ({ notificationId, sellerId }: { notificationId: string; sellerId: string }): Promise<NotificationLog> =>
+    makeNotification({
+      id: notificationId,
+      acknowledgedAt: "2026-04-06T01:00:00.000Z",
+      acknowledgedBySellerId: sellerId
+    })
+  );
+}
+
 class FakeOperatorQueryRepository implements OperatorQueryRepository {
   getOrderDetail = vi.fn(async (): Promise<OperatorOrderDetail> => ({
     order: makeOrder("shipped"),
@@ -234,6 +301,10 @@ class FakeOperatorQueryRepository implements OperatorQueryRepository {
       updatedAt: "2026-04-06T00:00:00.000Z"
     }
   ]);
+
+  listNotificationsByOrder = vi.fn(async (): Promise<OperatorNotificationSummary[]> => [
+    makeNotification()
+  ]);
 }
 
 function buildRequest(
@@ -266,10 +337,14 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
   const handleShippingWebhookService = new FakeHandleShippingWebhookService();
   const reconcileShipmentStatusService = new FakeReconcileShipmentStatusService();
   const operatorQueryRepository = new FakeOperatorQueryRepository();
+  const notificationQueryRepository = new FakeNotificationQueryRepository();
+  const acknowledgeNotificationService = new FakeAcknowledgeNotificationService();
 
   const handlers = createSelloraHttpHandlers({
     accessRepository,
     operatorQueryRepository,
+    notificationQueryRepository,
+    acknowledgeNotificationService,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -287,7 +362,9 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     confirmOrderDeliveryService,
     handleShippingWebhookService,
     reconcileShipmentStatusService,
-    operatorQueryRepository
+    operatorQueryRepository,
+    notificationQueryRepository,
+    acknowledgeNotificationService
   };
 }
 
@@ -489,6 +566,98 @@ describe("Sellora HTTP handlers", () => {
     expect((await fulfillmentResponse.json()).fulfillment.bookingReference).toBe("ship_1");
     expect((await timelineResponse.json()).timeline).toHaveLength(1);
     expect((await webhooksResponse.json()).receipts).toHaveLength(1);
+  });
+
+  it("returns notification visibility for scoped operators and supports list filters", async () => {
+    const {
+      handlers,
+      notificationQueryRepository
+    } = createHandlers();
+    const response = await handlers.listNotifications(
+      buildRequest("/api/notifications?status=sent&acknowledged=false", {
+        method: "GET",
+        headers: {
+          authorization: "Bearer operator-secret",
+          "x-sellora-seller-id": "seller_1"
+        }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(notificationQueryRepository.listNotifications).toHaveBeenCalledWith({
+      sellerId: "seller_1",
+      status: "sent",
+      acknowledged: false
+    });
+    expect((await response.json()).notifications).toHaveLength(2);
+  });
+
+  it("returns notification detail and allows idempotent acknowledge within seller scope", async () => {
+    const {
+      handlers,
+      notificationQueryRepository,
+      acknowledgeNotificationService
+    } = createHandlers();
+    const headers = {
+      authorization: "Bearer operator-secret",
+      "x-sellora-seller-id": "seller_1"
+    };
+
+    const detailResponse = await handlers.getNotification(
+      buildRequest("/api/notifications/notification_1", {
+        method: "GET",
+        headers
+      }),
+      { notificationId: "notification_1" }
+    );
+    const acknowledgeResponse = await handlers.acknowledgeNotification(
+      buildRequest("/api/notifications/notification_1/acknowledge", {
+        method: "POST",
+        headers
+      }),
+      { notificationId: "notification_1" }
+    );
+
+    expect(detailResponse.status).toBe(200);
+    expect(acknowledgeResponse.status).toBe(200);
+    expect(notificationQueryRepository.getNotificationDetail).toHaveBeenCalledWith("notification_1");
+    expect(acknowledgeNotificationService.execute).toHaveBeenCalledWith({
+      notificationId: "notification_1",
+      sellerId: "seller_1"
+    });
+    expect((await acknowledgeResponse.json()).notification.acknowledgedBySellerId).toBe("seller_1");
+  });
+
+  it("blocks notification reads and acknowledges outside seller scope", async () => {
+    const {
+      handlers,
+      notificationQueryRepository,
+      acknowledgeNotificationService
+    } = createHandlers(new FakeHttpAccessRepository("seller_1", "seller_1", "seller_2"));
+    const headers = {
+      authorization: "Bearer operator-secret",
+      "x-sellora-seller-id": "seller_1"
+    };
+
+    const detailResponse = await handlers.getNotification(
+      buildRequest("/api/notifications/notification_1", {
+        method: "GET",
+        headers
+      }),
+      { notificationId: "notification_1" }
+    );
+    const acknowledgeResponse = await handlers.acknowledgeNotification(
+      buildRequest("/api/notifications/notification_1/acknowledge", {
+        method: "POST",
+        headers
+      }),
+      { notificationId: "notification_1" }
+    );
+
+    expect(detailResponse.status).toBe(403);
+    expect(acknowledgeResponse.status).toBe(403);
+    expect(notificationQueryRepository.getNotificationDetail).not.toHaveBeenCalled();
+    expect(acknowledgeNotificationService.execute).not.toHaveBeenCalled();
   });
 
   it("blocks query visibility for orders outside seller scope", async () => {
