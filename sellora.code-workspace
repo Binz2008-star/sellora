@@ -1,0 +1,49 @@
+{
+  "folders": [
+    {
+      "name": "sellora",
+      "path": "."
+    },
+    {
+      "name": ".continue",
+      "path": "C:\\Users\\loyal\\.continue"
+    }
+  ],
+  "settings": {
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true
+    },
+    "files.exclude": {
+      "**/.git": true,
+      "**/node_modules": true,
+      "**/dist": true
+    },
+    "cSpell.words": [
+      "Sellora",
+      "sellora",
+      "ollama",
+      "qwen",
+      "deepseek",
+      "jarv",
+      "ecommerce"
+    ],
+    "extensions.ignoreRecommendations": false,
+    "chat.commandCenter.enabled": false,
+    "github.copilot.chat.localeOverride": "en",
+    "yaml.validate": true,
+    "yaml.format.enable": true
+  },
+  "extensions": {
+    "recommendations": [
+      "continue.continue",
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "redhat.vscode-yaml"
+    ],
+    "unwantedRecommendations": [
+      "github.copilot-chat",
+      "anthropic.claude-code"
+    ]
+  }
+}
