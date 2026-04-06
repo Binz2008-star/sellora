@@ -2,9 +2,16 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createSelloraHttpHandlers } from "../../src/api/http/handlers.js";
 import type { HttpAccessRepository } from "../../src/ports/http-access-repository.js";
+import type {
+  OperatorOrderDetail,
+  OperatorOrderTimelineEntry,
+  OperatorQueryRepository,
+  OperatorShippingWebhookReceipt
+} from "../../src/ports/operator-query-repository.js";
 import type { PaymentAttemptContext } from "../../src/ports/payment-repository.js";
 import type { Order, FulfillmentRecord } from "../../src/domain/orders/order.js";
 import type { NormalizedShippingWebhook } from "../../src/adapters/karrio/karrio-webhook-ingress.js";
+import type { PaymentAttempt } from "../../src/domain/payments/payment.js";
 
 function makeOrder(status: Order["status"] = "pending_payment"): Order {
   return {
@@ -142,6 +149,93 @@ class FakeReconcileShipmentStatusService {
   }));
 }
 
+class FakeOperatorQueryRepository implements OperatorQueryRepository {
+  getOrderDetail = vi.fn(async (): Promise<OperatorOrderDetail> => ({
+    order: makeOrder("shipped"),
+    customer: {
+      id: "customer_1",
+      name: "Customer One",
+      phone: "+971500000000",
+      city: "Dubai"
+    },
+    lines: [
+      {
+        id: "line_1",
+        orderId: "order_1",
+        productId: "product_1",
+        productOfferingId: "offering_1",
+        titleSnapshot: "Device One",
+        quantity: 1,
+        unitPrice: { amountMinor: 10000, currency: "AED" },
+        costPrice: { amountMinor: 7000, currency: "AED" },
+        currencySnapshot: "AED",
+        selectedAttributesSnapshot: {},
+        lineTotal: { amountMinor: 10000, currency: "AED" }
+      }
+    ]
+  }));
+
+  listPaymentAttempts = vi.fn(async (): Promise<PaymentAttempt[]> => [
+    {
+      id: "pay_1",
+      sellerId: "seller_1",
+      orderId: "order_1",
+      provider: "stripe",
+      providerReference: "pi_1",
+      idempotencyKey: "idem_1",
+      status: "paid",
+      amount: { amountMinor: 10000, currency: "AED" },
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z"
+    }
+  ]);
+
+  getFulfillment = vi.fn(async (): Promise<FulfillmentRecord> => ({
+    id: "fulfillment_1",
+    sellerId: "seller_1",
+    orderId: "order_1",
+    status: "shipped",
+    bookingReference: "ship_1",
+    courierName: "karrio",
+    trackingNumber: "TRK-1",
+    trackingUrl: "https://track.example/TRK-1",
+    providerStatus: "in_transit",
+    lastWebhookAt: "2026-04-06T00:00:00.000Z",
+    createdAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z"
+  }));
+
+  listOrderTimeline = vi.fn(async (): Promise<OperatorOrderTimelineEntry[]> => [
+    {
+      id: "evt_1",
+      eventType: "order_status_changed",
+      payload: {
+        from: "packing",
+        to: "shipped"
+      },
+      createdAt: "2026-04-06T00:00:00.000Z"
+    }
+  ]);
+
+  listShippingWebhookReceipts = vi.fn(async (): Promise<OperatorShippingWebhookReceipt[]> => [
+    {
+      id: "receipt_1",
+      provider: "karrio",
+      eventType: "tracker.updated",
+      idempotencyKey: "karrio:evt",
+      providerReference: "ship_1",
+      trackingNumber: "TRK-1",
+      normalizedStatus: "delivered",
+      rawPayload: {
+        status: "delivered"
+      },
+      receivedAt: "2026-04-06T00:00:00.000Z",
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z"
+    }
+  ]);
+}
+
 function buildRequest(
   path: string,
   init: RequestInit & { json?: unknown } = {}
@@ -171,9 +265,11 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
   const confirmOrderDeliveryService = new FakeConfirmOrderDeliveryService();
   const handleShippingWebhookService = new FakeHandleShippingWebhookService();
   const reconcileShipmentStatusService = new FakeReconcileShipmentStatusService();
+  const operatorQueryRepository = new FakeOperatorQueryRepository();
 
   const handlers = createSelloraHttpHandlers({
     accessRepository,
+    operatorQueryRepository,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -190,7 +286,8 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     bookOrderShipmentService,
     confirmOrderDeliveryService,
     handleShippingWebhookService,
-    reconcileShipmentStatusService
+    reconcileShipmentStatusService,
+    operatorQueryRepository
   };
 }
 
@@ -344,5 +441,74 @@ describe("Sellora HTTP handlers", () => {
 
     expect(response.status).toBe(401);
     expect(paymentService.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("returns order, payments, fulfillment, timeline, and webhook visibility for scoped operator reads", async () => {
+    const {
+      handlers,
+      operatorQueryRepository
+    } = createHandlers();
+    const headers = {
+      authorization: "Bearer operator-secret",
+      "x-sellora-seller-id": "seller_1"
+    };
+
+    const orderResponse = await handlers.getOrder(
+      buildRequest("/api/orders/order_1", { method: "GET", headers }),
+      { orderId: "order_1" }
+    );
+    const paymentsResponse = await handlers.getOrderPayments(
+      buildRequest("/api/orders/order_1/payments", { method: "GET", headers }),
+      { orderId: "order_1" }
+    );
+    const fulfillmentResponse = await handlers.getOrderFulfillment(
+      buildRequest("/api/orders/order_1/fulfillment", { method: "GET", headers }),
+      { orderId: "order_1" }
+    );
+    const timelineResponse = await handlers.getOrderTimeline(
+      buildRequest("/api/orders/order_1/timeline", { method: "GET", headers }),
+      { orderId: "order_1" }
+    );
+    const webhooksResponse = await handlers.getOrderShippingWebhooks(
+      buildRequest("/api/orders/order_1/shipping-webhooks", { method: "GET", headers }),
+      { orderId: "order_1" }
+    );
+
+    expect(orderResponse.status).toBe(200);
+    expect(paymentsResponse.status).toBe(200);
+    expect(fulfillmentResponse.status).toBe(200);
+    expect(timelineResponse.status).toBe(200);
+    expect(webhooksResponse.status).toBe(200);
+    expect(operatorQueryRepository.getOrderDetail).toHaveBeenCalledWith("order_1");
+    expect(operatorQueryRepository.listPaymentAttempts).toHaveBeenCalledWith("order_1");
+    expect(operatorQueryRepository.getFulfillment).toHaveBeenCalledWith("order_1");
+    expect(operatorQueryRepository.listOrderTimeline).toHaveBeenCalledWith("order_1");
+    expect(operatorQueryRepository.listShippingWebhookReceipts).toHaveBeenCalledWith("order_1");
+    expect((await orderResponse.json()).order.id).toBe("order_1");
+    expect((await paymentsResponse.json()).paymentAttempts).toHaveLength(1);
+    expect((await fulfillmentResponse.json()).fulfillment.bookingReference).toBe("ship_1");
+    expect((await timelineResponse.json()).timeline).toHaveLength(1);
+    expect((await webhooksResponse.json()).receipts).toHaveLength(1);
+  });
+
+  it("blocks query visibility for orders outside seller scope", async () => {
+    const {
+      handlers,
+      operatorQueryRepository
+    } = createHandlers(new FakeHttpAccessRepository("seller_2"));
+
+    const response = await handlers.getOrder(
+      buildRequest("/api/orders/order_1", {
+        method: "GET",
+        headers: {
+          authorization: "Bearer operator-secret",
+          "x-sellora-seller-id": "seller_1"
+        }
+      }),
+      { orderId: "order_1" }
+    );
+
+    expect(response.status).toBe(403);
+    expect(operatorQueryRepository.getOrderDetail).not.toHaveBeenCalled();
   });
 });

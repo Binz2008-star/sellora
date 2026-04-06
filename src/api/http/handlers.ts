@@ -7,6 +7,7 @@ import type { HandleShippingWebhookService } from "../../application/fulfillment
 import type { PaymentService } from "../../application/payments/payment.service.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type { HttpAccessRepository } from "../../ports/http-access-repository.js";
+import type { OperatorQueryRepository } from "../../ports/operator-query-repository.js";
 import { authorizeOrderAccess, requireOperatorAuth } from "./auth.js";
 import { HttpError, mapErrorToHttpError } from "./errors.js";
 import { jsonResponse, parseJsonBody } from "./json.js";
@@ -44,8 +45,15 @@ const bookShipmentSchema = orderCommandSchema.extend({
   destinationCity: z.string().min(1).optional()
 });
 
+const orderPathParamsSchema = z.object({
+  orderId: z.string().min(1)
+});
+
+type OrderPathParams = z.infer<typeof orderPathParamsSchema>;
+
 export interface SelloraHttpHandlerDependencies {
   accessRepository: HttpAccessRepository;
+  operatorQueryRepository: OperatorQueryRepository;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
   bookOrderShipmentService: Pick<BookOrderShipmentService, "execute">;
   confirmOrderDeliveryService: Pick<ConfirmOrderDeliveryService, "execute">;
@@ -59,6 +67,11 @@ export interface SelloraHttpHandlerDependencies {
 export const SELLORA_HTTP_ENDPOINTS = {
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
+  getOrder: "/api/orders/:orderId",
+  getOrderPayments: "/api/orders/:orderId/payments",
+  getOrderFulfillment: "/api/orders/:orderId/fulfillment",
+  getOrderTimeline: "/api/orders/:orderId/timeline",
+  getOrderShippingWebhooks: "/api/orders/:orderId/shipping-webhooks",
   bookShipment: "/api/fulfillment/shipments/book",
   confirmDelivery: "/api/fulfillment/deliveries/confirm",
   shippingWebhook: "/api/fulfillment/webhooks/karrio",
@@ -96,6 +109,8 @@ async function withHttpBoundary(
 export function createSelloraHttpHandlers(
   dependencies: SelloraHttpHandlerDependencies
 ) {
+  const requireOrderParams = (params: unknown): OrderPathParams => orderPathParamsSchema.parse(params);
+
   return {
     initiatePayment: (request: Request) =>
       withHttpBoundary(SELLORA_HTTP_ENDPOINTS.initiatePayment, async () => {
@@ -173,6 +188,76 @@ export function createSelloraHttpHandlers(
         return jsonResponse(200, {
           paymentAttempt: result.attempt,
           order: result.order
+        });
+      }),
+
+    getOrder: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getOrder, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireOrderParams(params);
+        await authorizeOrderAccess(dependencies.accessRepository, actor.sellerId, path.orderId);
+
+        const detail = await dependencies.operatorQueryRepository.getOrderDetail(path.orderId);
+        if (!detail) {
+          throw new HttpError(404, "not_found", `Order not found: ${path.orderId}`);
+        }
+
+        return jsonResponse(200, detail);
+      }),
+
+    getOrderPayments: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getOrderPayments, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireOrderParams(params);
+        await authorizeOrderAccess(dependencies.accessRepository, actor.sellerId, path.orderId);
+
+        const payments = await dependencies.operatorQueryRepository.listPaymentAttempts(path.orderId);
+
+        return jsonResponse(200, {
+          orderId: path.orderId,
+          paymentAttempts: payments
+        });
+      }),
+
+    getOrderFulfillment: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getOrderFulfillment, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireOrderParams(params);
+        await authorizeOrderAccess(dependencies.accessRepository, actor.sellerId, path.orderId);
+
+        const fulfillment = await dependencies.operatorQueryRepository.getFulfillment(path.orderId);
+
+        return jsonResponse(200, {
+          orderId: path.orderId,
+          fulfillment
+        });
+      }),
+
+    getOrderTimeline: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getOrderTimeline, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireOrderParams(params);
+        await authorizeOrderAccess(dependencies.accessRepository, actor.sellerId, path.orderId);
+
+        const timeline = await dependencies.operatorQueryRepository.listOrderTimeline(path.orderId);
+
+        return jsonResponse(200, {
+          orderId: path.orderId,
+          timeline
+        });
+      }),
+
+    getOrderShippingWebhooks: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.getOrderShippingWebhooks, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const path = requireOrderParams(params);
+        await authorizeOrderAccess(dependencies.accessRepository, actor.sellerId, path.orderId);
+
+        const receipts = await dependencies.operatorQueryRepository.listShippingWebhookReceipts(path.orderId);
+
+        return jsonResponse(200, {
+          orderId: path.orderId,
+          receipts
         });
       }),
 
