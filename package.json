@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:lifecycle": "vitest run tests/orders/transition-order.service.test.ts",
+    "smoke": "node scripts/deploy-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js"
