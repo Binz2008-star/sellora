@@ -18,6 +18,8 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   APP_NAME: z.string().default("sellora"),
+  APP_HOST: z.string().default("0.0.0.0"),
+  APP_PORT: z.coerce.number().int().positive().default(3000),
   DEFAULT_CURRENCY: z.string().default("AED"),
   OPERATOR_API_TOKEN: z.string().min(1).optional(),
   PAYMENT_WEBHOOK_SECRET: z.string().min(1).optional(),
@@ -66,6 +68,47 @@ const envSchema = z.object({
   DEFAULT_MAXIMUM_RISK_SCORE: z.coerce.number().default(45),
   DEFAULT_MINIMUM_LOCALIZATION_SCORE: z.coerce.number().default(60)
 }).superRefine((value, context) => {
+  if (value.NODE_ENV === "production") {
+    if (value.NOTIFICATION_PROVIDER === "memory") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["NOTIFICATION_PROVIDER"],
+        message: "NOTIFICATION_PROVIDER must use a real delivery channel in production"
+      });
+    }
+
+    const requiredProductionFields = [
+      "OPERATOR_API_TOKEN",
+      "PAYMENT_WEBHOOK_SECRET",
+      "KARRIO_WEBHOOK_SECRET",
+      "KARRIO_BASE_URL",
+      "KARRIO_API_KEY",
+      "KARRIO_SHIPPER_POSTAL_CODE",
+      "KARRIO_SHIPPER_COUNTRY_CODE",
+      "KARRIO_RECIPIENT_POSTAL_CODE",
+      "KARRIO_RECIPIENT_COUNTRY_CODE",
+      "KARRIO_PARCEL_WEIGHT_UNIT"
+    ] as const;
+
+    for (const field of requiredProductionFields) {
+      if (!value[field]) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [field],
+          message: `${field} is required in production`
+        });
+      }
+    }
+
+    if (value.KARRIO_PARCEL_WEIGHT === undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["KARRIO_PARCEL_WEIGHT"],
+        message: "KARRIO_PARCEL_WEIGHT is required in production"
+      });
+    }
+  }
+
   if (value.NOTIFICATION_PROVIDER === "resend") {
     if (!value.RESEND_API_KEY) {
       context.addIssue({

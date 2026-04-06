@@ -8,6 +8,7 @@ import {
   NotificationDispatchError,
   type NotificationGateway
 } from "../../ports/notification-gateway.js";
+import { logOperationalEvent } from "../../core/logging.js";
 import type {
   NotificationRepository,
   OrderNotificationContext
@@ -154,6 +155,12 @@ export class SendOrderNotificationService {
     });
 
     if (created.duplicate) {
+      logOperationalEvent("info", "notification_duplicate", {
+        orderId: context.orderId,
+        sellerId: context.sellerId,
+        templateKey: spec.templateKey,
+        recipientRole: recipient.recipientRole
+      });
       return {
         handled: true,
         duplicate: true,
@@ -177,6 +184,15 @@ export class SendOrderNotificationService {
 
       await this.notificationRepository.markSent(created.log.id, dispatched);
 
+      logOperationalEvent("info", "notification_sent", {
+        notificationLogId: created.log.id,
+        orderId: context.orderId,
+        sellerId: context.sellerId,
+        templateKey: spec.templateKey,
+        recipientRole: recipient.recipientRole,
+        providerMessageId: dispatched.providerMessageId ?? null
+      });
+
       return {
         handled: true,
         duplicate: false,
@@ -187,6 +203,15 @@ export class SendOrderNotificationService {
         failureMessage: error instanceof Error ? error.message : "notification_dispatch_failed",
         providerPayload:
           error instanceof NotificationDispatchError ? error.providerPayload : undefined
+      });
+
+      logOperationalEvent("error", "notification_failed", {
+        notificationLogId: created.log.id,
+        orderId: context.orderId,
+        sellerId: context.sellerId,
+        templateKey: spec.templateKey,
+        recipientRole: recipient.recipientRole,
+        failureMessage: error instanceof Error ? error.message : "notification_dispatch_failed"
       });
 
       return {

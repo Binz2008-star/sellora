@@ -6,12 +6,15 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "node prisma/seed.mjs",
     "test": "vitest run",
     "test:integration": "vitest run --maxWorkers 1 tests/integration",
     "test:lifecycle": "vitest run tests/orders/transition-order.service.test.ts",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

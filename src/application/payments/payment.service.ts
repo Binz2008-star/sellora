@@ -7,6 +7,7 @@ import { PaymentStateMachine } from "../../modules/payments/payment-state-machin
 import type { EventBus } from "../../ports/event-bus.js";
 import { createIdempotencyKey } from "../../modules/events/idempotency.js";
 import type { EventEnvelope } from "../../domain/events/event-envelope.js";
+import { logOperationalEvent } from "../../core/logging.js";
 
 export interface InitiatePaymentAttemptInput {
   sellerId: string;
@@ -64,6 +65,11 @@ export class PaymentService {
       );
 
       if (existingByKey) {
+        logOperationalEvent("info", "payment_attempt_duplicate_idempotency", {
+          sellerId: input.sellerId,
+          orderId: input.orderId,
+          paymentAttemptId: existingByKey.attempt.id
+        });
         return existingByKey;
       }
     }
@@ -73,7 +79,14 @@ export class PaymentService {
       throw new Error(`Active payment attempt already exists for order ${input.orderId}`);
     }
 
-    return this.paymentRepository.createAttempt(input);
+    const created = await this.paymentRepository.createAttempt(input);
+    logOperationalEvent("info", "payment_attempt_created", {
+      sellerId: created.attempt.sellerId,
+      orderId: created.order.id,
+      paymentAttemptId: created.attempt.id,
+      provider: created.attempt.provider
+    });
+    return created;
   }
 
   async markProcessing(input: MarkPaymentProcessingInput): Promise<PaymentAttemptContext> {
@@ -83,6 +96,10 @@ export class PaymentService {
     }
 
     if (context.attempt.status === "processing") {
+      logOperationalEvent("info", "payment_attempt_processing_duplicate", {
+        paymentAttemptId: context.attempt.id,
+        orderId: context.order.id
+      });
       return context;
     }
 
@@ -91,7 +108,7 @@ export class PaymentService {
       nextStatus: "processing"
     });
 
-    return this.paymentRepository.updateAttemptStatus({
+    const updated = await this.paymentRepository.updateAttemptStatus({
       paymentAttemptId: context.attempt.id,
       expectedCurrentStatus: context.attempt.status,
       nextStatus: "processing",
@@ -99,6 +116,12 @@ export class PaymentService {
       rawPayload: input.rawPayload,
       eventType: "payment_processing"
     });
+    logOperationalEvent("info", "payment_attempt_processing", {
+      paymentAttemptId: updated.attempt.id,
+      orderId: updated.order.id,
+      provider: updated.attempt.provider
+    });
+    return updated;
   }
 
   async markSucceeded(input: MarkPaymentSucceededInput): Promise<PaymentAttemptContext> {
@@ -114,6 +137,12 @@ export class PaymentService {
           duplicateByReference.attempt.id === input.paymentAttemptId &&
           duplicateByReference.attempt.status === "paid"
         ) {
+        logOperationalEvent("info", "payment_success_duplicate_reference", {
+          paymentAttemptId: duplicateByReference.attempt.id,
+          orderId: duplicateByReference.order.id,
+          provider: input.provider,
+          providerReference: input.providerReference
+        });
         return {
           context: duplicateByReference,
           pendingExternalEvents: []
@@ -223,6 +252,13 @@ export class PaymentService {
       }
     }
 
+    logOperationalEvent("info", "payment_attempt_succeeded", {
+      paymentAttemptId: transactionResult.context.attempt.id,
+      orderId: transactionResult.context.order.id,
+      provider: transactionResult.context.attempt.provider,
+      providerReference: input.providerReference
+    });
+
     return transactionResult.context;
   }
 
@@ -233,6 +269,10 @@ export class PaymentService {
     }
 
     if (context.attempt.status === "failed") {
+      logOperationalEvent("info", "payment_attempt_failed_duplicate", {
+        paymentAttemptId: context.attempt.id,
+        orderId: context.order.id
+      });
       return context;
     }
 
@@ -280,6 +320,13 @@ export class PaymentService {
         }
       });
     }
+
+    logOperationalEvent("info", "payment_attempt_failed", {
+      paymentAttemptId: updated.attempt.id,
+      orderId: updated.order.id,
+      provider: updated.attempt.provider,
+      failureReason: input.reason ?? null
+    });
 
     return updated;
   }

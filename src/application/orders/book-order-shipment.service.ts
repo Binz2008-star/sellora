@@ -4,6 +4,7 @@ import type {
   ShippingGateway
 } from "../../ports/shipping-gateway.js";
 import type { TransitionOrderService } from "./transition-order.service.js";
+import { logOperationalEvent } from "../../core/logging.js";
 
 export interface BookOrderShipmentInput {
   orderId: string;
@@ -31,6 +32,10 @@ export class BookOrderShipmentService {
     }
 
     if (context.order.status === "shipped" && context.fulfillmentRecord?.bookingReference) {
+      logOperationalEvent("info", "shipment_booking_duplicate", {
+        orderId: context.order.id,
+        bookingReference: context.fulfillmentRecord.bookingReference
+      });
       return {
         booking: {
           success: true,
@@ -64,6 +69,12 @@ export class BookOrderShipmentService {
     });
 
     if (!booking.success || !booking.providerReference) {
+      logOperationalEvent("error", "shipment_booking_failed", {
+        orderId: context.order.id,
+        provider: booking.provider,
+        failureCode: booking.failureCode ?? null,
+        failureMessage: booking.failureMessage ?? "Shipment booking failed"
+      });
       throw new Error(booking.failureMessage ?? "Shipment booking failed");
     }
 
@@ -78,6 +89,13 @@ export class BookOrderShipmentService {
         trackingUrl: booking.trackingUrl,
         rawPayload: booking.rawPayload
       }
+    });
+
+    logOperationalEvent("info", "shipment_booked", {
+      orderId: context.order.id,
+      provider: booking.provider,
+      bookingReference: booking.providerReference,
+      trackingNumber: booking.trackingNumber ?? null
     });
 
     return {

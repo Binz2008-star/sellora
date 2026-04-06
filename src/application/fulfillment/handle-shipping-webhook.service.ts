@@ -3,6 +3,7 @@ import type { FulfillmentRepository } from "../../ports/fulfillment-repository.j
 import type { ShippingWebhookRepository } from "../../ports/shipping-webhook-repository.js";
 import type { EventBus } from "../../ports/event-bus.js";
 import type { NormalizedShippingWebhook } from "../../adapters/karrio/karrio-webhook-ingress.js";
+import { logOperationalEvent } from "../../core/logging.js";
 
 export interface HandleShippingWebhookResult {
   duplicate: boolean;
@@ -44,6 +45,12 @@ export class HandleShippingWebhookService {
       );
 
       if (receipt.duplicate) {
+        logOperationalEvent("info", "shipping_webhook_duplicate", {
+          provider: webhook.provider,
+          providerReference: webhook.providerReference ?? null,
+          trackingNumber: webhook.trackingNumber ?? null,
+          idempotencyKey: webhook.idempotencyKey
+        });
         return {
           duplicate: true,
           deliveredHandoff: false,
@@ -52,6 +59,12 @@ export class HandleShippingWebhookService {
       }
 
       if (!context) {
+        logOperationalEvent("info", "shipping_webhook_unmatched", {
+          provider: webhook.provider,
+          providerReference: webhook.providerReference ?? null,
+          trackingNumber: webhook.trackingNumber ?? null,
+          normalizedStatus: webhook.normalizedStatus
+        });
         return {
           duplicate: false,
           deliveredHandoff: false,
@@ -74,6 +87,12 @@ export class HandleShippingWebhookService {
       );
 
       if (webhook.normalizedStatus !== "delivered") {
+        logOperationalEvent("info", "shipping_webhook_status_applied", {
+          orderId: context.order.id,
+          provider: webhook.provider,
+          providerReference: webhook.providerReference ?? null,
+          normalizedStatus: webhook.normalizedStatus
+        });
         return {
           duplicate: false,
           deliveredHandoff: false,
@@ -103,6 +122,15 @@ export class HandleShippingWebhookService {
         await this.eventBus.publish(event);
       }
     }
+
+    logOperationalEvent("info", "shipping_webhook_processed", {
+      duplicate: transactionResult.duplicate,
+      deliveredHandoff: transactionResult.deliveredHandoff,
+      provider: webhook.provider,
+      providerReference: webhook.providerReference ?? null,
+      trackingNumber: webhook.trackingNumber ?? null,
+      normalizedStatus: webhook.normalizedStatus
+    });
 
     return {
       duplicate: transactionResult.duplicate,

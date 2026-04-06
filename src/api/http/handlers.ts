@@ -5,6 +5,7 @@ import type { BookOrderShipmentService } from "../../application/orders/book-ord
 import type { ConfirmOrderDeliveryService } from "../../application/orders/confirm-order-delivery.service.js";
 import type { ReconcileShipmentStatusService } from "../../application/fulfillment/reconcile-shipment-status.service.js";
 import type { HandleShippingWebhookService } from "../../application/fulfillment/handle-shipping-webhook.service.js";
+import type { HealthCheckService } from "../../application/operations/health-check.service.js";
 import type { PaymentService } from "../../application/payments/payment.service.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type { HttpAccessRepository } from "../../ports/http-access-repository.js";
@@ -72,6 +73,7 @@ export interface SelloraHttpHandlerDependencies {
   operatorQueryRepository: OperatorQueryRepository;
   notificationQueryRepository: NotificationQueryRepository;
   acknowledgeNotificationService: Pick<AcknowledgeNotificationService, "execute">;
+  healthCheckService: Pick<HealthCheckService, "getHealth" | "getReadiness">;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
   bookOrderShipmentService: Pick<BookOrderShipmentService, "execute">;
   confirmOrderDeliveryService: Pick<ConfirmOrderDeliveryService, "execute">;
@@ -83,6 +85,8 @@ export interface SelloraHttpHandlerDependencies {
 }
 
 export const SELLORA_HTTP_ENDPOINTS = {
+  health: "/health",
+  readiness: "/ready",
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
   listNotifications: "/api/notifications",
@@ -135,6 +139,17 @@ export function createSelloraHttpHandlers(
     notificationPathParamsSchema.parse(params);
 
   return {
+    health: () =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.health, async () => {
+        return jsonResponse(200, dependencies.healthCheckService.getHealth());
+      }),
+
+    readiness: () =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.readiness, async () => {
+        const readiness = await dependencies.healthCheckService.getReadiness();
+        return jsonResponse(readiness.status === "ready" ? 200 : 503, readiness);
+      }),
+
     initiatePayment: (request: Request) =>
       withHttpBoundary(SELLORA_HTTP_ENDPOINTS.initiatePayment, async () => {
         const actor = requireOperatorAuth(request, dependencies.operatorApiToken);

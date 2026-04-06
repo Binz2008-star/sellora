@@ -99,6 +99,22 @@ class FakePaymentService {
   }));
 }
 
+class FakeHealthCheckService {
+  getHealth = vi.fn(() => ({
+    status: "ok" as const,
+    appName: "sellora",
+    environment: "test" as const,
+    uptimeSeconds: 1
+  }));
+
+  getReadiness = vi.fn(async () => ({
+    status: "ready" as const,
+    checks: {
+      database: "ok" as const
+    }
+  }));
+}
+
 class FakeBookOrderShipmentService {
   execute = vi.fn(async () => ({
     duplicateBooking: false,
@@ -332,6 +348,7 @@ function sign(body: string, secret: string): string {
 
 function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAccessRepository()) {
   const paymentService = new FakePaymentService();
+  const healthCheckService = new FakeHealthCheckService();
   const bookOrderShipmentService = new FakeBookOrderShipmentService();
   const confirmOrderDeliveryService = new FakeConfirmOrderDeliveryService();
   const handleShippingWebhookService = new FakeHandleShippingWebhookService();
@@ -345,6 +362,7 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     operatorQueryRepository,
     notificationQueryRepository,
     acknowledgeNotificationService,
+    healthCheckService,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -357,6 +375,7 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
 
   return {
     handlers,
+    healthCheckService,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -369,6 +388,28 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
 }
 
 describe("Sellora HTTP handlers", () => {
+  it("exposes health and readiness probes without auth", async () => {
+    const { handlers, healthCheckService } = createHandlers();
+
+    const healthResponse = await handlers.health();
+    const readinessResponse = await handlers.readiness();
+
+    expect(healthResponse.status).toBe(200);
+    expect(readinessResponse.status).toBe(200);
+    expect(healthCheckService.getHealth).toHaveBeenCalled();
+    expect(healthCheckService.getReadiness).toHaveBeenCalled();
+    expect(await healthResponse.json()).toMatchObject({
+      status: "ok",
+      appName: "sellora"
+    });
+    expect(await readinessResponse.json()).toEqual({
+      status: "ready",
+      checks: {
+        database: "ok"
+      }
+    });
+  });
+
   it("rejects unauthorized operator calls before service execution", async () => {
     const { handlers, paymentService } = createHandlers();
     const response = await handlers.initiatePayment(
