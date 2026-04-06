@@ -301,4 +301,40 @@ describe.sequential("Shipment reconciliation DB integration", () => {
     },
     30000
   );
+
+  it(
+    "falls back to fulfillment provider status when tracker lookup is unavailable",
+    async () => {
+      const fixture = await createFixture("SHIPPED");
+      await prisma.fulfillmentRecord.update({
+        where: { orderId: fixture.orderId },
+        data: {
+          status: "DELIVERED",
+          providerStatus: "delivered"
+        }
+      });
+      const gateway = new FakeShippingGateway({
+        success: false,
+        provider: "karrio",
+        failureMessage: "Tracking not found"
+      });
+      const { service } = createReconciliationServices(gateway);
+
+      const result = await service.execute({
+        orderId: fixture.orderId
+      });
+
+      const order = await prisma.order.findUniqueOrThrow({
+        where: { id: fixture.orderId }
+      });
+      const receipts = await prisma.shippingWebhookReceipt.findMany();
+
+      expect(result.duplicate).toBe(false);
+      expect(result.deliveredHandoff).toBe(true);
+      expect(order.status).toBe("DELIVERED");
+      expect(receipts).toHaveLength(1);
+      expect(gateway.statusCalls).toHaveLength(1);
+    },
+    30000
+  );
 });

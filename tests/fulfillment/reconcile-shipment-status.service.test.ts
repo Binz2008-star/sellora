@@ -74,7 +74,10 @@ class FakeFulfillmentRepository implements FulfillmentRepository {
 class FakeShippingGateway implements ShippingGateway {
   statusCalls: ShipmentStatusRequest[] = [];
 
-  constructor(private readonly statusResult: ShipmentStatusResult) {}
+  constructor(
+    private readonly statusResult: ShipmentStatusResult,
+    private readonly thrownError?: Error
+  ) {}
 
   async bookShipment() {
     throw new Error("not used");
@@ -82,6 +85,9 @@ class FakeShippingGateway implements ShippingGateway {
 
   async getShipmentStatus(request: ShipmentStatusRequest): Promise<ShipmentStatusResult> {
     this.statusCalls.push(request);
+    if (this.thrownError) {
+      throw this.thrownError;
+    }
     return this.statusResult;
   }
 }
@@ -184,6 +190,70 @@ describe("ReconcileShipmentStatusService", () => {
     expect(handleShippingWebhookService.calls).toHaveLength(2);
     expect(handleShippingWebhookService.calls[0].idempotencyKey).toBe(
       handleShippingWebhookService.calls[1].idempotencyKey
+    );
+  });
+
+  it("falls back to fulfillment status when provider snapshot is unavailable", async () => {
+    const gateway = new FakeShippingGateway({
+      success: false,
+      provider: "karrio",
+      failureMessage: "Tracking not found"
+    });
+    const handleShippingWebhookService = new FakeHandleShippingWebhookService();
+    const service = new ReconcileShipmentStatusService(
+      new FakeFulfillmentRepository({
+        order: makeOrder("shipped"),
+        fulfillmentRecord: makeFulfillmentRecord("delivered", "delivered")
+      }),
+      gateway,
+      handleShippingWebhookService
+    );
+
+    const result = await service.execute({
+      orderId: "order_1"
+    });
+
+    expect(result.duplicate).toBe(false);
+    expect(result.deliveredHandoff).toBe(true);
+    expect(result.noChange).toBe(false);
+    expect(gateway.statusCalls).toHaveLength(1);
+    expect(handleShippingWebhookService.calls).toHaveLength(1);
+    expect(handleShippingWebhookService.calls[0].eventType).toBe(
+      "tracker.reconciled.fallback"
+    );
+    expect(handleShippingWebhookService.calls[0].normalizedStatus).toBe("delivered");
+  });
+
+  it("falls back to fulfillment status when provider lookup throws", async () => {
+    const gateway = new FakeShippingGateway(
+      {
+        success: false,
+        provider: "karrio",
+        failureMessage: "Tracking not found"
+      },
+      new Error("provider timeout")
+    );
+    const handleShippingWebhookService = new FakeHandleShippingWebhookService();
+    const service = new ReconcileShipmentStatusService(
+      new FakeFulfillmentRepository({
+        order: makeOrder("shipped"),
+        fulfillmentRecord: makeFulfillmentRecord("delivered", "delivered")
+      }),
+      gateway,
+      handleShippingWebhookService
+    );
+
+    const result = await service.execute({
+      orderId: "order_1"
+    });
+
+    expect(result.duplicate).toBe(false);
+    expect(result.deliveredHandoff).toBe(true);
+    expect(result.noChange).toBe(false);
+    expect(gateway.statusCalls).toHaveLength(1);
+    expect(handleShippingWebhookService.calls).toHaveLength(1);
+    expect(handleShippingWebhookService.calls[0].eventType).toBe(
+      "tracker.reconciled.fallback"
     );
   });
 
