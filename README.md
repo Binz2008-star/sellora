@@ -101,6 +101,22 @@ The repo now includes:
 - Prisma-backed repositories for source listings, opportunities, autonomy policies, workflow runs, and action logs
 - legacy intake planning in `src/modules/migration`
 
+## Deployment
+
+Single-instance deployment is container-first.
+
+1. Build the image:
+   `docker build -t sellora:latest .`
+2. Provide production env vars, especially:
+   `DATABASE_URL`, `OPERATOR_API_TOKEN`, `PAYMENT_WEBHOOK_SECRET`, `KARRIO_WEBHOOK_SECRET`
+3. Run migrations on startup:
+   the container entrypoint runs `npx prisma migrate deploy`
+4. Start the service:
+   the container serves HTTP on port `3000`
+5. Verify:
+   `GET /health`
+   `GET /ready`
+
 ## Next Build Steps
 
 1. Implement the authoritative order transition service.
