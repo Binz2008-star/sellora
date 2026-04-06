@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+const optionalNonEmptyString = () =>
+  z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim().length === 0 ? undefined : value,
+    z.string().min(1).optional()
+  );
+
+const optionalEmailString = () =>
+  z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim().length === 0 ? undefined : value,
+    z.string().email().optional()
+  );
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
@@ -8,6 +22,11 @@ const envSchema = z.object({
   OPERATOR_API_TOKEN: z.string().min(1).optional(),
   PAYMENT_WEBHOOK_SECRET: z.string().min(1).optional(),
   KARRIO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  NOTIFICATION_PROVIDER: z.enum(["memory", "resend"]).default("memory"),
+  NOTIFICATION_FROM_EMAIL: optionalEmailString(),
+  NOTIFICATION_REPLY_TO_EMAIL: optionalEmailString(),
+  RESEND_API_KEY: optionalNonEmptyString(),
+  RESEND_BASE_URL: z.string().url().default("https://api.resend.com"),
   KARRIO_BASE_URL: z.string().url().optional(),
   KARRIO_API_KEY: z.string().min(1).optional(),
   KARRIO_PROVIDER_NAME: z.string().default("karrio"),
@@ -46,6 +65,24 @@ const envSchema = z.object({
   DEFAULT_MINIMUM_MARGIN_PCT: z.coerce.number().default(25),
   DEFAULT_MAXIMUM_RISK_SCORE: z.coerce.number().default(45),
   DEFAULT_MINIMUM_LOCALIZATION_SCORE: z.coerce.number().default(60)
+}).superRefine((value, context) => {
+  if (value.NOTIFICATION_PROVIDER === "resend") {
+    if (!value.RESEND_API_KEY) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["RESEND_API_KEY"],
+        message: "RESEND_API_KEY is required when NOTIFICATION_PROVIDER is resend"
+      });
+    }
+
+    if (!value.NOTIFICATION_FROM_EMAIL) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["NOTIFICATION_FROM_EMAIL"],
+        message: "NOTIFICATION_FROM_EMAIL is required when NOTIFICATION_PROVIDER is resend"
+      });
+    }
+  }
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

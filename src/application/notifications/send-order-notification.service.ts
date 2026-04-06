@@ -4,7 +4,10 @@ import type {
   NotificationTemplateKey
 } from "../../domain/notifications/notification.js";
 import { createIdempotencyKey } from "../../modules/events/idempotency.js";
-import type { NotificationGateway } from "../../ports/notification-gateway.js";
+import {
+  NotificationDispatchError,
+  type NotificationGateway
+} from "../../ports/notification-gateway.js";
 import type {
   NotificationRepository,
   OrderNotificationContext
@@ -163,6 +166,7 @@ export class SendOrderNotificationService {
         recipientEmail: recipient.recipientAddress,
         subject: message.subject,
         body: message.body,
+        idempotencyKey: notificationKey,
         metadata: {
           sellerId: context.sellerId,
           orderId: context.orderId,
@@ -180,7 +184,9 @@ export class SendOrderNotificationService {
       };
     } catch (error) {
       await this.notificationRepository.markFailed(created.log.id, {
-        failureMessage: error instanceof Error ? error.message : "notification_dispatch_failed"
+        failureMessage: error instanceof Error ? error.message : "notification_dispatch_failed",
+        providerPayload:
+          error instanceof NotificationDispatchError ? error.providerPayload : undefined
       });
 
       return {

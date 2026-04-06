@@ -166,6 +166,7 @@ describe("SendOrderNotificationService", () => {
       "order_delivered"
     ]);
     expect(gateway.sentEmails).toHaveLength(3);
+    expect(gateway.sentEmails.every((email) => typeof email.idempotencyKey === "string")).toBe(true);
   });
 
   it("prevents duplicate notifications for repeated facts", async () => {
@@ -203,5 +204,6 @@ describe("SendOrderNotificationService", () => {
     expect(innerBus.events).toHaveLength(1);
     expect(repository.logs).toHaveLength(1);
     expect(repository.logs[0].status).toBe("failed");
+    expect(repository.logs[0].providerPayload).toEqual(undefined);
   });
 });

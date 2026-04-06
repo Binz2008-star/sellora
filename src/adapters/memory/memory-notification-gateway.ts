@@ -18,7 +18,8 @@ export class MemoryNotificationGateway implements NotificationGateway {
       providerMessageId: `memory_email_${this.sentEmails.length}`,
       providerPayload: {
         recipientEmail: request.recipientEmail,
-        subject: request.subject
+        subject: request.subject,
+        idempotencyKey: request.idempotencyKey ?? null
       }
     };
   }

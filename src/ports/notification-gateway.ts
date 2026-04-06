@@ -5,11 +5,22 @@ export interface EmailNotificationRequest {
   subject: string;
   body: string;
   metadata?: KeyValueRecord;
+  idempotencyKey?: string;
 }
 
 export interface EmailNotificationResult {
   providerMessageId?: string;
   providerPayload?: KeyValueRecord;
+}
+
+export class NotificationDispatchError extends Error {
+  constructor(
+    message: string,
+    public readonly providerPayload?: KeyValueRecord
+  ) {
+    super(message);
+    this.name = "NotificationDispatchError";
+  }
 }
 
 export interface NotificationGateway {
