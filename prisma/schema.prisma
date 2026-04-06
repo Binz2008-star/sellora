@@ -151,6 +151,21 @@ enum ShipmentStatus {
   RETURNED
 }
 
+enum NotificationChannel {
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum NotificationRecipientRole {
+  CUSTOMER
+  OPERATOR
+}
+
 enum VerificationStatus {
   PENDING
   PASSED
@@ -201,6 +216,7 @@ model Seller {
   paymentAttempts      PaymentAttempt[]
   fulfillmentRecords   FulfillmentRecord[]
   shippingWebhookReceipts ShippingWebhookReceipt[]
+  notifications        NotificationLog[]
   verificationPolicies VerificationTemplate[]
   inspections          ProductInspection[]
   warrantyPolicies     WarrantyPolicy[]
@@ -608,11 +624,40 @@ model Order {
   paymentAttempts      PaymentAttempt[]
   events               OrderEvent[]
   fulfillmentRecord    FulfillmentRecord?
+  notifications        NotificationLog[]
   invoices             Invoice[]
 
   @@index([sellerId, status])
   @@index([customerId])
   @@index([paymentStatus])
+}
+
+model NotificationLog {
+  id                String                    @id @default(cuid())
+  sellerId          String
+  orderId           String
+  channel           NotificationChannel
+  status            NotificationStatus        @default(PENDING)
+  recipientRole     NotificationRecipientRole
+  recipientAddress  String
+  templateKey       String
+  eventType         String
+  eventIdempotencyKey String
+  notificationKey   String                    @unique
+  subject           String
+  body              String
+  providerMessageId String?
+  providerPayloadJson Json?
+  failureMessage    String?
+  dispatchedAt      DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  seller            Seller                    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  order             Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId, createdAt])
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
 }
 
 model OrderLine {

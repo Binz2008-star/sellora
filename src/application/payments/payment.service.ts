@@ -5,6 +5,8 @@ import type { PaymentAttemptContext } from "../../ports/payment-repository.js";
 import type { PaymentAttempt } from "../../domain/payments/payment.js";
 import { PaymentStateMachine } from "../../modules/payments/payment-state-machine.js";
 import type { EventBus } from "../../ports/event-bus.js";
+import { createIdempotencyKey } from "../../modules/events/idempotency.js";
+import type { EventEnvelope } from "../../domain/events/event-envelope.js";
 
 export interface InitiatePaymentAttemptInput {
   sellerId: string;
@@ -112,10 +114,10 @@ export class PaymentService {
           duplicateByReference.attempt.id === input.paymentAttemptId &&
           duplicateByReference.attempt.status === "paid"
         ) {
-          return {
-            context: duplicateByReference,
-            pendingExternalEvents: []
-          };
+        return {
+          context: duplicateByReference,
+          pendingExternalEvents: []
+        };
         }
 
         throw new Error(`Duplicate provider reference detected: ${input.providerReference}`);
@@ -161,6 +163,28 @@ export class PaymentService {
         transaction
       );
 
+      const pendingExternalEvents: EventEnvelope[] = [{
+        id: createIdempotencyKey(["payment_succeeded", updated.attempt.id, input.providerReference]),
+        aggregateType: "payment_attempt",
+        aggregateId: updated.attempt.id,
+        eventType: "payment_succeeded",
+        occurredAt: updated.attempt.updatedAt,
+        idempotencyKey: createIdempotencyKey([
+          "payment_succeeded",
+          updated.attempt.id,
+          input.providerReference
+        ]),
+        payload: {
+          sellerId: updated.attempt.sellerId,
+          orderId: updated.attempt.orderId,
+          provider: updated.attempt.provider,
+          providerReference: input.providerReference,
+          amountMinor: updated.attempt.amount.amountMinor,
+          currency: updated.attempt.amount.currency,
+          status: updated.attempt.status
+        }
+      }];
+
       if (canAdvanceOrderAfterPayment(updated.order.status)) {
         const transition = await this.transitionOrderService.transition(
           {
@@ -176,20 +200,20 @@ export class PaymentService {
 
         return {
           context: updated,
-          pendingExternalEvents: transition.pendingExternalEvents
+          pendingExternalEvents: [...pendingExternalEvents, ...transition.pendingExternalEvents]
         };
       }
 
       if (!isAdvancedOrderState(updated.order.status)) {
         return {
           context: updated,
-          pendingExternalEvents: []
+          pendingExternalEvents
         };
       }
 
       return {
         context: updated,
-        pendingExternalEvents: []
+        pendingExternalEvents
       };
     });
 
@@ -222,7 +246,7 @@ export class PaymentService {
       failureReason: input.reason ?? null
     };
 
-    return this.paymentRepository.updateAttemptStatus({
+    const updated = await this.paymentRepository.updateAttemptStatus({
       paymentAttemptId: context.attempt.id,
       expectedCurrentStatus: context.attempt.status,
       nextStatus: "failed",
@@ -230,5 +254,33 @@ export class PaymentService {
       rawPayload: input.rawPayload,
       eventType: "payment_failed"
     });
+
+    if (this.eventBus) {
+      const providerReference = updated.attempt.providerReference ?? "none";
+      await this.eventBus.publish({
+        id: createIdempotencyKey(["payment_failed", updated.attempt.id, providerReference]),
+        aggregateType: "payment_attempt",
+        aggregateId: updated.attempt.id,
+        eventType: "payment_failed",
+        occurredAt: updated.attempt.updatedAt,
+        idempotencyKey: createIdempotencyKey([
+          "payment_failed",
+          updated.attempt.id,
+          providerReference
+        ]),
+        payload: {
+          sellerId: updated.attempt.sellerId,
+          orderId: updated.attempt.orderId,
+          provider: updated.attempt.provider,
+          providerReference: updated.attempt.providerReference ?? null,
+          amountMinor: updated.attempt.amount.amountMinor,
+          currency: updated.attempt.amount.currency,
+          status: updated.attempt.status,
+          failureReason: input.reason ?? null
+        }
+      });
+    }
+
+    return updated;
   }
 }

@@ -312,7 +312,8 @@ describeIfDatabase("Payment lifecycle DB integration", () => {
     expect(order.paymentStatus).toBe("PAID");
     expect(events.filter((event) => event.eventType === "payment_succeeded")).toHaveLength(1);
     expect(events.filter((event) => event.eventType === "order_status_changed")).toHaveLength(0);
-    expect(eventBus.events).toHaveLength(0);
+    expect(eventBus.events.filter((event) => event.eventType === "payment_succeeded")).toHaveLength(1);
+    expect(eventBus.events.filter((event) => event.eventType === "order_status_changed")).toHaveLength(0);
     },
     30000
   );
