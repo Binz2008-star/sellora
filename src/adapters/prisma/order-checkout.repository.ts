@@ -215,7 +215,7 @@ async function upsertCustomer(
 
 export class PrismaOrderCheckoutRepository implements OrderCheckoutRepository {
   async createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const run = async (tx: Prisma.TransactionClient) => {
       const offerings = await tx.productOffering.findMany({
         where: {
           sellerId: input.sellerId,
@@ -389,6 +389,23 @@ export class PrismaOrderCheckoutRepository implements OrderCheckoutRepository {
         lines: lineRecords.map(mapOrderLine),
         inventoryMovements: reserveMovements.map(mapInventoryMovement)
       };
-    });
+    };
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await prisma.$transaction(run, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable
+        });
+      } catch (error) {
+        const isSerializationFailure =
+          error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+
+        if (!isSerializationFailure || attempt === 2) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error("Order creation failed after serialization retries");
   }
 }

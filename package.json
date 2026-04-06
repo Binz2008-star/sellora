@@ -10,7 +10,7 @@
     "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "node prisma/seed.mjs",
     "test": "vitest run",
-    "test:integration": "vitest run --maxWorkers 1 tests/integration",
+    "test:integration": "node --env-file=.env.test ./node_modules/vitest/vitest.mjs run --maxWorkers 1 tests/integration",
     "test:lifecycle": "vitest run tests/orders/transition-order.service.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",

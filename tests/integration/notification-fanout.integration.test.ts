@@ -19,8 +19,6 @@ import type {
   ShippingGateway
 } from "../../src/ports/shipping-gateway.js";
 
-const describeIfDatabase = process.env.DATABASE_URL ? describe.sequential : describe.skip;
-
 let sequence = 0;
 
 function nextId(prefix: string): string {
@@ -247,7 +245,7 @@ function createServices(shippingGateway: ShippingGateway = new SuccessfulGateway
   };
 }
 
-describeIfDatabase("Notification fanout DB integration", () => {
+describe.sequential("Notification fanout DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });

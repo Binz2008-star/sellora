@@ -4,8 +4,6 @@ import { PrismaNotificationRepository } from "../../src/adapters/prisma/notifica
 import { PrismaNotificationQueryRepository } from "../../src/adapters/prisma/notification-query.repository.js";
 import { AcknowledgeNotificationService } from "../../src/application/notifications/acknowledge-notification.service.js";
 
-const describeIfDatabase = process.env.DATABASE_URL ? describe.sequential : describe.skip;
-
 let sequence = 0;
 
 function nextId(prefix: string): string {
@@ -147,7 +145,7 @@ async function createFixture() {
   };
 }
 
-describeIfDatabase("Notification inbox DB integration", () => {
+describe.sequential("Notification inbox DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });

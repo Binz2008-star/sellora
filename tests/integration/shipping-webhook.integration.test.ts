@@ -9,8 +9,6 @@ import { TransitionOrderService } from "../../src/application/orders/transition-
 import { HandleShippingWebhookService } from "../../src/application/fulfillment/handle-shipping-webhook.service.js";
 import { createIdempotencyKey } from "../../src/modules/events/idempotency.js";
 
-const describeIfDatabase = process.env.DATABASE_URL ? describe.sequential : describe.skip;
-
 let sequence = 0;
 
 function nextId(prefix: string): string {
@@ -181,7 +179,7 @@ function createWebhookServices() {
   return { eventBus, service };
 }
 
-describeIfDatabase("Shipping webhook DB integration", () => {
+describe.sequential("Shipping webhook DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });

@@ -16,8 +16,6 @@ import type {
   ShippingGateway
 } from "../../src/ports/shipping-gateway.js";
 
-const describeIfDatabase = process.env.DATABASE_URL ? describe.sequential : describe.skip;
-
 let sequence = 0;
 
 function nextId(prefix: string): string {
@@ -209,7 +207,7 @@ function createReconciliationServices(gateway: ShippingGateway) {
   return { eventBus, service };
 }
 
-describeIfDatabase("Shipment reconciliation DB integration", () => {
+describe.sequential("Shipment reconciliation DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });

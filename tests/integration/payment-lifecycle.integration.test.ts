@@ -6,8 +6,6 @@ import { PrismaPaymentRepository } from "../../src/adapters/prisma/payment.repos
 import { TransitionOrderService } from "../../src/application/orders/transition-order.service.js";
 import { PaymentService } from "../../src/application/payments/payment.service.js";
 
-const describeIfDatabase = process.env.DATABASE_URL ? describe.sequential : describe.skip;
-
 type FixtureOptions = {
   orderStatus: "pending_payment" | "reserved" | "packing";
   paymentStatus: "pending" | "processing";
@@ -203,7 +201,7 @@ function createIntegratedServices() {
   return { eventBus, paymentService };
 }
 
-describeIfDatabase("Payment lifecycle DB integration", () => {
+describe.sequential("Payment lifecycle DB integration", () => {
   beforeAll(async () => {
     await prisma.$connect();
   });

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { EventBus } from "../../ports/event-bus.js";
 import type {
   CreateOrderInput,
@@ -16,8 +17,9 @@ export interface CreateSelloraOrderInput extends Omit<CreateOrderInput, "orderNu
 function buildOrderNumber(): string {
   const now = new Date();
   const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const suffix = now.getTime().toString(36).toUpperCase();
-  return `SOR-${datePart}-${suffix}`;
+  const timestampPart = now.getTime().toString(36).toUpperCase();
+  const entropyPart = randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+  return `SOR-${datePart}-${timestampPart}-${entropyPart}`;
 }
 
 function normalizeLines(input: CreateSelloraOrderInput["lines"]): CreateOrderInput["lines"] {
