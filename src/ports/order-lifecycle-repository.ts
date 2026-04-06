@@ -5,6 +5,7 @@ import type {
   OrderLine,
   OrderStatus
 } from "../domain/orders/order.js";
+import type { RepositoryTransaction } from "./repository-transaction.js";
 
 export interface TransitionContextLine extends OrderLine {
   inventoryMode: InventoryMode;
@@ -48,6 +49,12 @@ export interface ApplyOrderTransitionResult {
 }
 
 export interface OrderLifecycleRepository {
-  getTransitionContext(orderId: string): Promise<OrderTransitionContext | null>;
-  applyTransition(input: ApplyOrderTransitionInput): Promise<ApplyOrderTransitionResult>;
+  getTransitionContext(
+    orderId: string,
+    transaction?: RepositoryTransaction
+  ): Promise<OrderTransitionContext | null>;
+  applyTransition(
+    input: ApplyOrderTransitionInput,
+    transaction?: RepositoryTransaction
+  ): Promise<ApplyOrderTransitionResult>;
 }

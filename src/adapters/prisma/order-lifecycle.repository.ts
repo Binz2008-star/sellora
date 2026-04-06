@@ -15,6 +15,7 @@ import type {
   OrderTransitionContext,
   TransitionContextLine
 } from "../../ports/order-lifecycle-repository.js";
+import type { RepositoryTransaction } from "../../ports/repository-transaction.js";
 
 type OrderRecord = {
   id: string;
@@ -192,8 +193,12 @@ async function createLifecycleEvent(
 }
 
 export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository {
-  async getTransitionContext(orderId: string): Promise<OrderTransitionContext | null> {
-    const order = await prisma.order.findUnique({
+  async getTransitionContext(
+    orderId: string,
+    transaction?: RepositoryTransaction
+  ): Promise<OrderTransitionContext | null> {
+    const client = (transaction as Prisma.TransactionClient | undefined) ?? prisma;
+    const order = await client.order.findUnique({
       where: { id: orderId },
       include: {
         lines: {
@@ -222,8 +227,11 @@ export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository 
     };
   }
 
-  async applyTransition(input: ApplyOrderTransitionInput): Promise<ApplyOrderTransitionResult> {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  async applyTransition(
+    input: ApplyOrderTransitionInput,
+    transaction?: RepositoryTransaction
+  ): Promise<ApplyOrderTransitionResult> {
+    const run = async (tx: Prisma.TransactionClient) => {
       const current = await tx.order.findUnique({
         where: { id: input.orderId },
         include: {
@@ -365,6 +373,12 @@ export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository 
         inventoryMovements: createdMovements.map(mapInventoryMovement),
         fulfillmentRecord: fulfillmentRecord ? mapFulfillmentRecord(fulfillmentRecord) : undefined
       };
-    });
+    };
+
+    if (transaction) {
+      return run(transaction as Prisma.TransactionClient);
+    }
+
+    return prisma.$transaction(run);
   }
 }

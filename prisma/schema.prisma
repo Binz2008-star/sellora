@@ -62,6 +62,7 @@ enum PaymentPolicy {
 
 enum PaymentStatus {
   PENDING
+  PROCESSING
   AUTHORIZED
   PAID
   FAILED
@@ -641,6 +642,7 @@ model PaymentAttempt {
   orderId           String
   provider          String
   providerReference String?
+  idempotencyKey    String?
   amountMinor       Int
   currency          String
   status            PaymentStatus @default(PENDING)
@@ -652,6 +654,7 @@ model PaymentAttempt {
   order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerReference])
+  @@unique([sellerId, idempotencyKey])
   @@index([sellerId, status])
   @@index([orderId])
 }

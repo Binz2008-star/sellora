@@ -15,7 +15,13 @@ export type OrderStatus =
   | "refunded"
   | "expired";
 
-export type PaymentStatus = "pending" | "authorized" | "paid" | "failed" | "refunded";
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "authorized"
+  | "paid"
+  | "failed"
+  | "refunded";
 
 export interface Order extends AuditStamp {
   id: EntityId;

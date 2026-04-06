@@ -1,0 +1,1 @@
+export type RepositoryTransaction = unknown;

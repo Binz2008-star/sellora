@@ -7,6 +7,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "node prisma/seed.mjs",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration/**/*.test.ts",
+    "test:lifecycle": "vitest run tests/orders/transition-order.service.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json"
   },
@@ -17,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^22.13.14",
     "prisma": "^6.6.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
   }
 }

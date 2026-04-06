@@ -3,6 +3,8 @@ import type { EventBus } from "../../ports/event-bus.js";
 import type { OrderStatus } from "../../domain/orders/order.js";
 import { OrderStateMachine } from "../../modules/orders/order-state-machine.js";
 import { createIdempotencyKey } from "../../modules/events/idempotency.js";
+import type { EventEnvelope } from "../../domain/events/event-envelope.js";
+import type { RepositoryTransaction } from "../../ports/repository-transaction.js";
 
 const TERMINAL_RELEASE_STATUSES: OrderStatus[] = ["cancelled", "expired"];
 
@@ -15,6 +17,18 @@ export interface TransitionOrderInput {
     courierName?: string;
     trackingNumber?: string;
   };
+}
+
+export interface TransitionOrderOptions {
+  transaction?: RepositoryTransaction;
+  publishExternalEvents?: boolean;
+}
+
+export interface TransitionOrderResult {
+  order: Awaited<ReturnType<OrderLifecycleRepository["applyTransition"]>>["order"];
+  inventoryMovements: Awaited<ReturnType<OrderLifecycleRepository["applyTransition"]>>["inventoryMovements"];
+  fulfillmentRecord?: Awaited<ReturnType<OrderLifecycleRepository["applyTransition"]>>["fulfillmentRecord"];
+  pendingExternalEvents: EventEnvelope[];
 }
 
 function buildInventoryActions(
@@ -84,8 +98,14 @@ export class TransitionOrderService {
     private readonly orderStateMachine = new OrderStateMachine()
   ) {}
 
-  async transition(input: TransitionOrderInput) {
-    const context = await this.orderLifecycleRepository.getTransitionContext(input.orderId);
+  async transition(
+    input: TransitionOrderInput,
+    options: TransitionOrderOptions = {}
+  ): Promise<TransitionOrderResult> {
+    const context = await this.orderLifecycleRepository.getTransitionContext(
+      input.orderId,
+      options.transaction
+    );
 
     if (!context) {
       throw new Error(`Order not found: ${input.orderId}`);
@@ -105,16 +125,19 @@ export class TransitionOrderService {
 
     const fulfillmentUpdate = buildFulfillmentUpdate(input.nextStatus, input.fulfillment);
 
-    const result = await this.orderLifecycleRepository.applyTransition({
-      orderId: context.order.id,
-      expectedCurrentStatus: context.order.status,
-      nextStatus: input.nextStatus,
-      reason: input.reason,
-      inventoryActions,
-      fulfillmentUpdate
-    });
+    const result = await this.orderLifecycleRepository.applyTransition(
+      {
+        orderId: context.order.id,
+        expectedCurrentStatus: context.order.status,
+        nextStatus: input.nextStatus,
+        reason: input.reason,
+        inventoryActions,
+        fulfillmentUpdate
+      },
+      options.transaction
+    );
 
-    await this.eventBus.publish({
+    const pendingExternalEvents: EventEnvelope[] = [{
       id: createIdempotencyKey(["order_status_changed", result.order.id, input.nextStatus]),
       aggregateType: "order",
       aggregateId: result.order.id,
@@ -126,10 +149,10 @@ export class TransitionOrderService {
         to: transition.nextStatus,
         reason: transition.reason ?? "unspecified"
       }
-    });
+    }];
 
     for (const movement of result.inventoryMovements) {
-      await this.eventBus.publish({
+      pendingExternalEvents.push({
         id: createIdempotencyKey(["inventory_lifecycle", movement.id]),
         aggregateType: "inventory_movement",
         aggregateId: movement.id,
@@ -147,7 +170,7 @@ export class TransitionOrderService {
     }
 
     if (result.fulfillmentRecord) {
-      await this.eventBus.publish({
+      pendingExternalEvents.push({
         id: createIdempotencyKey([
           "fulfillment_status_changed",
           result.fulfillmentRecord.id,
@@ -171,6 +194,15 @@ export class TransitionOrderService {
       });
     }
 
-    return result;
+    if (options.publishExternalEvents !== false) {
+      for (const event of pendingExternalEvents) {
+        await this.eventBus.publish(event);
+      }
+    }
+
+    return {
+      ...result,
+      pendingExternalEvents
+    };
   }
 }
