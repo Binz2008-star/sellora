@@ -200,6 +200,7 @@ model Seller {
   orders               Order[]
   paymentAttempts      PaymentAttempt[]
   fulfillmentRecords   FulfillmentRecord[]
+  shippingWebhookReceipts ShippingWebhookReceipt[]
   verificationPolicies VerificationTemplate[]
   inspections          ProductInspection[]
   warrantyPolicies     WarrantyPolicy[]
@@ -680,6 +681,8 @@ model FulfillmentRecord {
   courierName    String?
   trackingNumber String?
   trackingUrl    String?
+  providerStatus String?
+  lastWebhookAt  DateTime?
   handedOffAt    DateTime?
   deliveredAt    DateTime?
   rawPayloadJson Json?
@@ -689,6 +692,27 @@ model FulfillmentRecord {
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([sellerId, status])
+}
+
+model ShippingWebhookReceipt {
+  id             String   @id @default(cuid())
+  sellerId       String?
+  provider       String
+  eventType      String
+  idempotencyKey String   @unique
+  providerReference String?
+  trackingNumber String?
+  normalizedStatus String
+  orderId        String?
+  rawPayloadJson Json
+  receivedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  seller         Seller?  @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+
+  @@index([provider, providerReference])
+  @@index([provider, trackingNumber])
+  @@index([orderId])
 }
 
 model VerificationTemplate {

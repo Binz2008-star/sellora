@@ -1,11 +1,15 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../core/db/prisma.js";
 import type { FulfillmentRecord, Order } from "../../domain/orders/order.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type {
   FulfillmentDeliveryContext,
   FulfillmentRepository,
-  FulfillmentShipmentContext
+  FulfillmentShipmentContext,
+  ShippingWebhookContext,
+  UpsertProviderStatusInput
 } from "../../ports/fulfillment-repository.js";
+import type { RepositoryTransaction } from "../../ports/repository-transaction.js";
 
 type OrderRecord = {
   id: string;
@@ -41,7 +45,9 @@ type OrderRecord = {
     courierName: string | null;
     trackingNumber: string | null;
     trackingUrl: string | null;
+    providerStatus: string | null;
     rawPayloadJson: unknown;
+    lastWebhookAt: Date | null;
     handedOffAt: Date | null;
     deliveredAt: Date | null;
     createdAt: Date;
@@ -93,10 +99,12 @@ function mapFulfillmentRecord(
     courierName: record.courierName ?? undefined,
     trackingNumber: record.trackingNumber ?? undefined,
     trackingUrl: record.trackingUrl ?? undefined,
+    providerStatus: record.providerStatus ?? undefined,
     rawPayload:
       ((record.rawPayloadJson as KeyValueRecord | null) ?? undefined) as
         | KeyValueRecord
         | undefined,
+    lastWebhookAt: record.lastWebhookAt?.toISOString(),
     handedOffAt: record.handedOffAt?.toISOString(),
     deliveredAt: record.deliveredAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
@@ -105,8 +113,73 @@ function mapFulfillmentRecord(
 }
 
 export class PrismaFulfillmentRepository implements FulfillmentRepository {
-  async getShipmentContext(orderId: string): Promise<FulfillmentShipmentContext | null> {
-    const order = await prisma.order.findUnique({
+  async findWebhookContext(
+    lookup: {
+      providerReference?: string;
+      trackingNumber?: string;
+    },
+    transaction?: RepositoryTransaction
+  ): Promise<ShippingWebhookContext | null> {
+    if (!lookup.providerReference && !lookup.trackingNumber) {
+      return null;
+    }
+
+    const client = (transaction as any) ?? prisma;
+    const orClauses: Prisma.FulfillmentRecordWhereInput[] = [];
+    if (lookup.providerReference) {
+      orClauses.push({ bookingReference: lookup.providerReference });
+    }
+    if (lookup.trackingNumber) {
+      orClauses.push({ trackingNumber: lookup.trackingNumber });
+    }
+    const fulfillment = await client.fulfillmentRecord.findFirst({
+      where: {
+        OR: orClauses
+      },
+      include: {
+        order: true
+      }
+    });
+
+    if (!fulfillment) {
+      return null;
+    }
+
+    return {
+      order: mapOrder(fulfillment.order as unknown as OrderRecord),
+      fulfillmentRecord: mapFulfillmentRecord(fulfillment as unknown as NonNullable<OrderRecord["fulfillmentRecord"]>)
+    };
+  }
+
+  async updateProviderStatus(
+    input: UpsertProviderStatusInput,
+    transaction?: RepositoryTransaction
+  ): Promise<FulfillmentRecord> {
+    const client = (transaction as any) ?? prisma;
+    const updated = await client.fulfillmentRecord.update({
+      where: {
+        id: input.fulfillmentRecordId
+      },
+      data: {
+        providerStatus: input.providerStatus,
+        bookingReference: input.providerReference,
+        trackingNumber: input.trackingNumber,
+        trackingUrl: input.trackingUrl,
+        courierName: input.courierName,
+        rawPayloadJson: input.rawPayload,
+        lastWebhookAt: new Date(input.receivedAt)
+      }
+    });
+
+    return mapFulfillmentRecord(updated as unknown as NonNullable<OrderRecord["fulfillmentRecord"]>);
+  }
+
+  async getShipmentContext(
+    orderId: string,
+    transaction?: RepositoryTransaction
+  ): Promise<FulfillmentShipmentContext | null> {
+    const client = (transaction as any) ?? prisma;
+    const order = await client.order.findUnique({
       where: { id: orderId },
       include: {
         customer: {
@@ -145,8 +218,12 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
     };
   }
 
-  async getDeliveryContext(orderId: string): Promise<FulfillmentDeliveryContext | null> {
-    const order = await prisma.order.findUnique({
+  async getDeliveryContext(
+    orderId: string,
+    transaction?: RepositoryTransaction
+  ): Promise<FulfillmentDeliveryContext | null> {
+    const client = (transaction as typeof prisma | undefined) ?? prisma;
+    const order = await client.order.findUnique({
       where: { id: orderId },
       include: {
         fulfillmentRecord: true

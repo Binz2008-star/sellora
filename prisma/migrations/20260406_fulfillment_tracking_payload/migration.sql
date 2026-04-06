@@ -1,2 +1,2 @@
-ALTER TABLE "FulfillmentRecord"
-ADD COLUMN "trackingUrl" TEXT;
+ALTER TABLE IF EXISTS "FulfillmentRecord"
+ADD COLUMN IF NOT EXISTS "trackingUrl" TEXT;

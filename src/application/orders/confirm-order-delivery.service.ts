@@ -3,9 +3,15 @@ import type {
   FulfillmentRepository
 } from "../../ports/fulfillment-repository.js";
 import type { TransitionOrderService } from "./transition-order.service.js";
+import type { RepositoryTransaction } from "../../ports/repository-transaction.js";
 
 export interface ConfirmOrderDeliveryInput {
   orderId: string;
+}
+
+export interface ConfirmOrderDeliveryOptions {
+  transaction?: RepositoryTransaction;
+  publishExternalEvents?: boolean;
 }
 
 export interface ConfirmOrderDeliveryResult {
@@ -20,8 +26,14 @@ export class ConfirmOrderDeliveryService {
     private readonly transitionOrderService: Pick<TransitionOrderService, "transition">
   ) {}
 
-  async execute(input: ConfirmOrderDeliveryInput): Promise<ConfirmOrderDeliveryResult> {
-    const context = await this.fulfillmentRepository.getDeliveryContext(input.orderId);
+  async execute(
+    input: ConfirmOrderDeliveryInput,
+    options: ConfirmOrderDeliveryOptions = {}
+  ): Promise<ConfirmOrderDeliveryResult> {
+    const context = await this.fulfillmentRepository.getDeliveryContext(
+      input.orderId,
+      options.transaction
+    );
 
     if (!context) {
       throw new Error(`Order not found: ${input.orderId}`);
@@ -42,7 +54,7 @@ export class ConfirmOrderDeliveryService {
       orderId: context.order.id,
       nextStatus: "delivered",
       reason: "delivery_confirmed"
-    });
+    }, options);
 
     return {
       context,

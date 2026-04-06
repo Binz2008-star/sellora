@@ -62,7 +62,9 @@ export interface FulfillmentRecord extends AuditStamp {
   courierName?: string;
   trackingNumber?: string;
   trackingUrl?: string;
+  providerStatus?: string;
   rawPayload?: KeyValueRecord;
+  lastWebhookAt?: string;
   handedOffAt?: string;
   deliveredAt?: string;
 }
