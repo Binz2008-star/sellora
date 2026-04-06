@@ -1,4 +1,4 @@
-import type { AuditStamp, EntityId, Money } from "../shared/types.js";
+import type { AuditStamp, EntityId, KeyValueRecord, Money } from "../shared/types.js";
 
 export type OrderMode = "reservation" | "standard" | "quote-conversion";
 export type PaymentPolicy = "full-upfront" | "deposit-then-balance" | "manual-invoice";
@@ -61,6 +61,8 @@ export interface FulfillmentRecord extends AuditStamp {
   bookingReference?: string;
   courierName?: string;
   trackingNumber?: string;
+  trackingUrl?: string;
+  rawPayload?: KeyValueRecord;
   handedOffAt?: string;
   deliveredAt?: string;
 }

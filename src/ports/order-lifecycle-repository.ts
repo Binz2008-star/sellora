@@ -29,6 +29,8 @@ export interface FulfillmentLifecycleUpdate {
   bookingReference?: string;
   courierName?: string;
   trackingNumber?: string;
+  trackingUrl?: string;
+  rawPayload?: Record<string, unknown>;
   handedOffAt?: string;
   deliveredAt?: string;
 }

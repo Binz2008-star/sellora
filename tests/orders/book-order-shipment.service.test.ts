@@ -45,9 +45,16 @@ class FakeShippingGateway implements ShippingGateway {
 
   constructor(
     private readonly result: ShipmentBookingResult = {
+      success: true,
+      provider: "karrio",
+      providerReference: "BOOK-1",
       bookingReference: "BOOK-1",
       courierName: "Quiqup",
-      trackingNumber: "TRK-1"
+      trackingNumber: "TRK-1",
+      trackingUrl: "https://track.example/TRK-1",
+      rawPayload: {
+        shipment_id: "BOOK-1"
+      }
     }
   ) {}
 
@@ -59,7 +66,15 @@ class FakeShippingGateway implements ShippingGateway {
 
 class FailingShippingGateway implements ShippingGateway {
   async bookShipment(): Promise<ShipmentBookingResult> {
-    throw new Error("gateway unavailable");
+    return {
+      success: false,
+      provider: "karrio",
+      failureCode: "provider_error",
+      failureMessage: "gateway unavailable",
+      rawPayload: {
+        error: "gateway unavailable"
+      }
+    };
   }
 }
 
@@ -102,6 +117,24 @@ function createHarness(status: Order["status"]) {
   const repository = new FakeFulfillmentRepository({
     order: makeOrder(status),
     destinationCity: "Dubai",
+    fulfillmentRecord:
+      status === "shipped"
+        ? {
+            id: "fulfillment_1",
+            sellerId: "seller_1",
+            orderId: "order_1",
+            status: "shipped",
+            bookingReference: "BOOK-EXISTING",
+            courierName: "Quiqup",
+            trackingNumber: "TRK-EXISTING",
+            trackingUrl: "https://track.example/TRK-EXISTING",
+            rawPayload: {
+              shipment_id: "BOOK-EXISTING"
+            },
+            createdAt: "2026-04-06T00:00:00.000Z",
+            updatedAt: "2026-04-06T00:00:00.000Z"
+          }
+        : undefined,
     lines: [
       {
         productOfferingId: "offering_1",
@@ -148,10 +181,15 @@ describe("BookOrderShipmentService", () => {
       fulfillment: {
         bookingReference: "BOOK-1",
         courierName: "Quiqup",
-        trackingNumber: "TRK-1"
+        trackingNumber: "TRK-1",
+        trackingUrl: "https://track.example/TRK-1",
+        rawPayload: {
+          shipment_id: "BOOK-1"
+        }
       }
     });
-    expect(result.booking.bookingReference).toBe("BOOK-1");
+    expect(result.duplicateBooking).toBe(false);
+    expect(result.booking.providerReference).toBe("BOOK-1");
     expect(result.transition.order.status).toBe("shipped");
   });
 
@@ -193,6 +231,20 @@ describe("BookOrderShipmentService", () => {
       })
     ).rejects.toThrow("gateway unavailable");
 
+    expect(transitionOrderService.calls).toHaveLength(0);
+  });
+
+  it("treats repeated booking on shipped order as idempotent", async () => {
+    const { service, shippingGateway, transitionOrderService } = createHarness("shipped");
+
+    const result = await service.execute({
+      orderId: "order_1"
+    });
+
+    expect(result.duplicateBooking).toBe(true);
+    expect(result.transition).toBeUndefined();
+    expect(result.booking.providerReference).toBe("BOOK-EXISTING");
+    expect(shippingGateway.calls).toHaveLength(0);
     expect(transitionOrderService.calls).toHaveLength(0);
   });
 });

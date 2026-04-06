@@ -12,7 +12,8 @@ export interface BookOrderShipmentInput {
 
 export interface BookOrderShipmentResult {
   booking: ShipmentBookingResult;
-  transition: Awaited<ReturnType<TransitionOrderService["transition"]>>;
+  transition?: Awaited<ReturnType<TransitionOrderService["transition"]>>;
+  duplicateBooking: boolean;
 }
 
 export class BookOrderShipmentService {
@@ -27,6 +28,22 @@ export class BookOrderShipmentService {
 
     if (!context) {
       throw new Error(`Order not found: ${input.orderId}`);
+    }
+
+    if (context.order.status === "shipped" && context.fulfillmentRecord?.bookingReference) {
+      return {
+        booking: {
+          success: true,
+          provider: context.fulfillmentRecord.courierName ?? "unknown",
+          providerReference: context.fulfillmentRecord.bookingReference,
+          bookingReference: context.fulfillmentRecord.bookingReference,
+          trackingNumber: context.fulfillmentRecord.trackingNumber,
+          trackingUrl: context.fulfillmentRecord.trackingUrl,
+          courierName: context.fulfillmentRecord.courierName,
+          rawPayload: context.fulfillmentRecord.rawPayload
+        },
+        duplicateBooking: true
+      };
     }
 
     if (context.order.status !== "packing") {
@@ -46,20 +63,27 @@ export class BookOrderShipmentService {
       }))
     });
 
+    if (!booking.success || !booking.providerReference) {
+      throw new Error(booking.failureMessage ?? "Shipment booking failed");
+    }
+
     const transition = await this.transitionOrderService.transition({
       orderId: context.order.id,
       nextStatus: "shipped",
       reason: "shipment_booked",
       fulfillment: {
-        bookingReference: booking.bookingReference,
+        bookingReference: booking.providerReference,
         courierName: booking.courierName,
-        trackingNumber: booking.trackingNumber
+        trackingNumber: booking.trackingNumber,
+        trackingUrl: booking.trackingUrl,
+        rawPayload: booking.rawPayload
       }
     });
 
     return {
       booking,
-      transition
+      transition,
+      duplicateBooking: false
     };
   }
 }

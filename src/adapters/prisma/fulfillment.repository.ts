@@ -1,5 +1,6 @@
 import { prisma } from "../../core/db/prisma.js";
 import type { FulfillmentRecord, Order } from "../../domain/orders/order.js";
+import type { KeyValueRecord } from "../../domain/shared/types.js";
 import type {
   FulfillmentDeliveryContext,
   FulfillmentRepository,
@@ -39,6 +40,8 @@ type OrderRecord = {
     bookingReference: string | null;
     courierName: string | null;
     trackingNumber: string | null;
+    trackingUrl: string | null;
+    rawPayloadJson: unknown;
     handedOffAt: Date | null;
     deliveredAt: Date | null;
     createdAt: Date;
@@ -89,6 +92,11 @@ function mapFulfillmentRecord(
     bookingReference: record.bookingReference ?? undefined,
     courierName: record.courierName ?? undefined,
     trackingNumber: record.trackingNumber ?? undefined,
+    trackingUrl: record.trackingUrl ?? undefined,
+    rawPayload:
+      ((record.rawPayloadJson as KeyValueRecord | null) ?? undefined) as
+        | KeyValueRecord
+        | undefined,
     handedOffAt: record.handedOffAt?.toISOString(),
     deliveredAt: record.deliveredAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
@@ -112,7 +120,8 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
             titleSnapshot: true,
             quantity: true
           }
-        }
+        },
+        fulfillmentRecord: true
       }
     });
 
@@ -125,6 +134,9 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
     return {
       order: mapOrder(record),
       destinationCity: record.customer.city ?? undefined,
+      fulfillmentRecord: record.fulfillmentRecord
+        ? mapFulfillmentRecord(record.fulfillmentRecord)
+        : undefined,
       lines: record.lines.map((line) => ({
         productOfferingId: line.productOfferingId,
         titleSnapshot: line.titleSnapshot,

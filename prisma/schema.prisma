@@ -679,6 +679,7 @@ model FulfillmentRecord {
   bookingReference String?
   courierName    String?
   trackingNumber String?
+  trackingUrl    String?
   handedOffAt    DateTime?
   deliveredAt    DateTime?
   rawPayloadJson Json?

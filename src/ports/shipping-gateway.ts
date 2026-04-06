@@ -1,3 +1,5 @@
+import type { KeyValueRecord } from "../domain/shared/types.js";
+
 export interface ShipmentBookingRequest {
   orderId: string;
   destinationCity?: string;
@@ -8,9 +10,16 @@ export interface ShipmentBookingRequest {
 }
 
 export interface ShipmentBookingResult {
-  bookingReference: string;
+  success: boolean;
+  provider: string;
+  providerReference?: string;
+  bookingReference?: string;
   trackingNumber?: string;
+  trackingUrl?: string;
   courierName?: string;
+  rawPayload?: KeyValueRecord;
+  failureCode?: string;
+  failureMessage?: string;
 }
 
 export interface ShippingGateway {

@@ -9,6 +9,7 @@ export interface FulfillmentShipmentLine {
 export interface FulfillmentShipmentContext {
   order: Order;
   destinationCity?: string;
+  fulfillmentRecord?: FulfillmentRecord;
   lines: FulfillmentShipmentLine[];
 }
 

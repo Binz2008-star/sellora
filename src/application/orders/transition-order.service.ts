@@ -16,6 +16,8 @@ export interface TransitionOrderInput {
     bookingReference?: string;
     courierName?: string;
     trackingNumber?: string;
+    trackingUrl?: string;
+    rawPayload?: Record<string, unknown>;
   };
 }
 
@@ -74,6 +76,8 @@ function buildFulfillmentUpdate(
       bookingReference: fulfillment?.bookingReference,
       courierName: fulfillment?.courierName,
       trackingNumber: fulfillment?.trackingNumber,
+      trackingUrl: fulfillment?.trackingUrl,
+      rawPayload: fulfillment?.rawPayload,
       handedOffAt: new Date().toISOString()
     };
   }
@@ -84,6 +88,8 @@ function buildFulfillmentUpdate(
       bookingReference: fulfillment?.bookingReference,
       courierName: fulfillment?.courierName,
       trackingNumber: fulfillment?.trackingNumber,
+      trackingUrl: fulfillment?.trackingUrl,
+      rawPayload: fulfillment?.rawPayload,
       deliveredAt: new Date().toISOString()
     };
   }
@@ -189,6 +195,7 @@ export class TransitionOrderService {
           orderId: result.fulfillmentRecord.orderId,
           status: result.fulfillmentRecord.status,
           trackingNumber: result.fulfillmentRecord.trackingNumber ?? null,
+          trackingUrl: result.fulfillmentRecord.trackingUrl ?? null,
           courierName: result.fulfillmentRecord.courierName ?? null
         }
       });

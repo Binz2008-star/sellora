@@ -76,10 +76,22 @@ type FulfillmentRecordRow = {
   bookingReference: string | null;
   courierName: string | null;
   trackingNumber: string | null;
+  trackingUrl: string | null;
+  rawPayloadJson: unknown;
   handedOffAt: Date | null;
   deliveredAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type CurrentFulfillmentRecord = {
+  bookingReference: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  rawPayloadJson: Prisma.JsonValue | null;
+  handedOffAt: Date | null;
+  deliveredAt: Date | null;
 };
 
 function mapOrder(record: OrderRecord): Order {
@@ -166,6 +178,11 @@ function mapFulfillmentRecord(record: FulfillmentRecordRow): FulfillmentRecord {
     bookingReference: record.bookingReference ?? undefined,
     courierName: record.courierName ?? undefined,
     trackingNumber: record.trackingNumber ?? undefined,
+    trackingUrl: record.trackingUrl ?? undefined,
+    rawPayload:
+      ((record.rawPayloadJson as KeyValueRecord | null) ?? undefined) as
+        | KeyValueRecord
+        | undefined,
     handedOffAt: record.handedOffAt?.toISOString(),
     deliveredAt: record.deliveredAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
@@ -329,7 +346,7 @@ export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository 
       let fulfillmentRecord: FulfillmentRecordRow | null = null;
 
       if (input.fulfillmentUpdate) {
-        const existing = current.fulfillmentRecord;
+        const existing = current.fulfillmentRecord as CurrentFulfillmentRecord | null;
         const data = {
           sellerId: updatedOrder.sellerId,
           status: toShipmentStatus(input.fulfillmentUpdate.status),
@@ -339,6 +356,12 @@ export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository 
             input.fulfillmentUpdate.courierName ?? existing?.courierName ?? null,
           trackingNumber:
             input.fulfillmentUpdate.trackingNumber ?? existing?.trackingNumber ?? null,
+          trackingUrl:
+            input.fulfillmentUpdate.trackingUrl ?? existing?.trackingUrl ?? null,
+          rawPayloadJson:
+            (input.fulfillmentUpdate.rawPayload ?? existing?.rawPayloadJson ?? undefined) as
+              | Prisma.InputJsonValue
+              | undefined,
           handedOffAt:
             input.fulfillmentUpdate.handedOffAt
               ? new Date(input.fulfillmentUpdate.handedOffAt)
@@ -364,6 +387,7 @@ export class PrismaOrderLifecycleRepository implements OrderLifecycleRepository 
         await createLifecycleEvent(tx, updatedOrder.id, "fulfillment_status_changed", {
           status: input.fulfillmentUpdate.status,
           trackingNumber: data.trackingNumber,
+          trackingUrl: data.trackingUrl,
           courierName: data.courierName
         });
       }
