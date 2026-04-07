@@ -15,11 +15,6 @@ import type { PaymentAttemptContext } from "../../src/ports/payment-repository.j
 import type { Order, FulfillmentRecord } from "../../src/domain/orders/order.js";
 import type { NormalizedShippingWebhook } from "../../src/adapters/karrio/karrio-webhook-ingress.js";
 import type { PaymentAttempt } from "../../src/domain/payments/payment.js";
-import type {
-  RetrievalBenchmarkDatasetSummary,
-  RetrievalBenchmarkSummary,
-  RetrievalSearchResult
-} from "../../src/domain/retrieval/retrieval.js";
 import type { StorefrontSettings } from "../../src/domain/tenancy/seller.js";
 
 function makeOrder(status: Order["status"] = "pending_payment"): Order {
@@ -161,101 +156,6 @@ class FakeCreateTenantService {
   }));
 }
 
-class FakeRunRetrievalQueryService {
-  execute = vi.fn(async (): Promise<RetrievalSearchResult> => ({
-    query: {
-      text: "refund payment",
-      language: "en",
-      topK: 5
-    },
-    hits: [
-      {
-        documentId: "doc_1",
-        score: 1,
-        rank: 1
-      }
-    ]
-  }));
-}
-
-class FakeEvaluateRetrievalBenchmarkService {
-  execute = vi.fn(async (): Promise<RetrievalBenchmarkSummary> => ({
-    datasetName: "support-search-smoke",
-    caseCount: 1,
-    topK: 5,
-    averageRecallAtK: 1,
-    averageNdcgAtK: 1,
-    failures: []
-  }));
-}
-
-class FakeGetRetrievalBenchmarkDatasetService {
-  list = vi.fn((): RetrievalBenchmarkDatasetSummary[] => [
-    {
-      id: "sellora-retrieval-smoke-v1",
-      name: "Sellora Retrieval Smoke v1",
-      description: "Internal retrieval smoke benchmark",
-      useCases: ["support_search", "help_center_grounding", "catalog_candidate_retrieval"],
-      caseCount: 6,
-      corpusDocumentCount: 6
-    }
-  ]);
-
-  getOrThrow = vi.fn((datasetId: string) => ({
-    id: datasetId,
-    name: "Sellora Retrieval Smoke v1",
-    description: "Internal retrieval smoke benchmark",
-    useCases: ["support_search", "help_center_grounding", "catalog_candidate_retrieval"] as const,
-    corpus: [
-      {
-        id: "doc_1",
-        language: "en",
-        title: "Refund payment issue",
-        body: "Refunds for failed payments"
-      }
-    ],
-    cases: [
-      {
-        id: "case_1",
-        query: "refund payment",
-        language: "en",
-        useCase: "support_search" as const,
-        relevantDocumentIds: ["doc_1"],
-        expectedPrimaryDocumentId: "doc_1",
-        tags: ["support"]
-      }
-    ]
-  }));
-}
-
-class FakeBookOrderShipmentService {
-  execute = vi.fn(async () => ({
-    duplicateBooking: false,
-    booking: {
-      success: true,
-      provider: "karrio",
-      providerReference: "ship_1"
-    }
-  }));
-}
-
-class FakeConfirmOrderDeliveryService {
-  execute = vi.fn(async () => ({
-    duplicateConfirmation: false,
-    context: {
-      order: makeOrder("shipped"),
-      fulfillmentRecord: {
-        id: "fulfillment_1",
-        sellerId: "seller_1",
-        orderId: "order_1",
-        status: "shipped",
-        createdAt: "2026-04-06T00:00:00.000Z",
-        updatedAt: "2026-04-06T00:00:00.000Z"
-      } as FulfillmentRecord
-    }
-  }));
-}
-
 function makeStorefront(
   overrides: Partial<StorefrontSettings> = {}
 ): StorefrontSettings {
@@ -300,6 +200,34 @@ class FakeUpdateSellerStorefrontSettingsService {
         trustPolicyIds: input.trustPolicyIds ?? []
       })
   );
+}
+
+class FakeBookOrderShipmentService {
+  execute = vi.fn(async () => ({
+    duplicateBooking: false,
+    booking: {
+      success: true,
+      provider: "karrio",
+      providerReference: "ship_1"
+    }
+  }));
+}
+
+class FakeConfirmOrderDeliveryService {
+  execute = vi.fn(async () => ({
+    duplicateConfirmation: false,
+    context: {
+      order: makeOrder("shipped"),
+      fulfillmentRecord: {
+        id: "fulfillment_1",
+        sellerId: "seller_1",
+        orderId: "order_1",
+        status: "shipped",
+        createdAt: "2026-04-06T00:00:00.000Z",
+        updatedAt: "2026-04-06T00:00:00.000Z"
+      } as FulfillmentRecord
+    }
+  }));
 }
 
 class FakeHandleShippingWebhookService {
@@ -513,9 +441,6 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
   const paymentService = new FakePaymentService();
   const healthCheckService = new FakeHealthCheckService();
   const createTenantService = new FakeCreateTenantService();
-  const runRetrievalQueryService = new FakeRunRetrievalQueryService();
-  const evaluateRetrievalBenchmarkService = new FakeEvaluateRetrievalBenchmarkService();
-  const getRetrievalBenchmarkDatasetService = new FakeGetRetrievalBenchmarkDatasetService();
   const getSellerStorefrontSettingsService = new FakeGetSellerStorefrontSettingsService();
   const updateSellerStorefrontSettingsService = new FakeUpdateSellerStorefrontSettingsService();
   const bookOrderShipmentService = new FakeBookOrderShipmentService();
@@ -531,9 +456,6 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     operatorQueryRepository,
     notificationQueryRepository,
     createTenantService,
-    runRetrievalQueryService,
-    evaluateRetrievalBenchmarkService,
-    getRetrievalBenchmarkDatasetService,
     getSellerStorefrontSettingsService,
     updateSellerStorefrontSettingsService,
     acknowledgeNotificationService,
@@ -552,9 +474,6 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     handlers,
     healthCheckService,
     createTenantService,
-    runRetrievalQueryService,
-    evaluateRetrievalBenchmarkService,
-    getRetrievalBenchmarkDatasetService,
     getSellerStorefrontSettingsService,
     updateSellerStorefrontSettingsService,
     paymentService,
@@ -639,137 +558,6 @@ describe("Sellora HTTP handlers", () => {
     expect(body.tenant.seller.slug).toBe("seller-one");
     expect(body.tenant.storefront.primaryLocale).toBe("en-AE");
     expect(body.tenant.ownerMembership.role).toBe("owner");
-  });
-
-  it("runs admin retrieval query experiments behind operator auth", async () => {
-    const { handlers, runRetrievalQueryService } = createHandlers();
-
-    const response = await handlers.runRetrievalQuery(
-      buildRequest("/api/admin/retrieval/query", {
-        headers: {
-          authorization: "Bearer operator-secret"
-        },
-        json: {
-          query: "refund payment",
-          language: "en",
-          topK: 5,
-          corpus: [
-            {
-              id: "doc_1",
-              language: "en",
-              title: "Refund payment issue",
-              body: "Refunds for failed payments"
-            }
-          ]
-        }
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(runRetrievalQueryService.execute).toHaveBeenCalledWith({
-      query: "refund payment",
-      language: "en",
-      topK: 5,
-      corpus: [
-        {
-          id: "doc_1",
-          language: "en",
-          title: "Refund payment issue",
-          body: "Refunds for failed payments"
-        }
-      ]
-    });
-    expect((await response.json()).result.hits[0]?.documentId).toBe("doc_1");
-  });
-
-  it("lists built-in retrieval benchmarks behind operator auth", async () => {
-    const { handlers, getRetrievalBenchmarkDatasetService } = createHandlers();
-
-    const response = await handlers.listRetrievalBenchmarks(
-      buildRequest("/api/admin/retrieval/benchmarks", {
-        method: "GET",
-        headers: {
-          authorization: "Bearer operator-secret"
-        }
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(getRetrievalBenchmarkDatasetService.list).toHaveBeenCalled();
-    expect((await response.json()).datasets[0].id).toBe("sellora-retrieval-smoke-v1");
-  });
-
-  it("evaluates retrieval benchmarks behind operator auth", async () => {
-    const { handlers, evaluateRetrievalBenchmarkService } = createHandlers();
-
-    const response = await handlers.evaluateRetrievalBenchmark(
-      buildRequest("/api/admin/retrieval/benchmark/evaluate", {
-        headers: {
-          authorization: "Bearer operator-secret"
-        },
-        json: {
-          dataset: {
-            name: "support-search-smoke",
-            corpus: [
-              {
-                id: "doc_1",
-                language: "en",
-                title: "Refund payment issue",
-                body: "Refunds for failed payments"
-              }
-            ],
-            cases: [
-              {
-                id: "case_1",
-                query: "refund payment",
-                language: "en",
-                useCase: "support_search",
-                relevantDocumentIds: ["doc_1"]
-              }
-            ]
-          },
-          topK: 5
-        }
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(evaluateRetrievalBenchmarkService.execute).toHaveBeenCalled();
-    expect((await response.json()).summary.averageRecallAtK).toBe(1);
-  });
-
-  it("evaluates a built-in retrieval benchmark by dataset id", async () => {
-    const {
-      handlers,
-      evaluateRetrievalBenchmarkService,
-      getRetrievalBenchmarkDatasetService
-    } = createHandlers();
-
-    const response = await handlers.evaluateBuiltInRetrievalBenchmark(
-      buildRequest("/api/admin/retrieval/benchmark/evaluate/sellora-retrieval-smoke-v1", {
-        headers: {
-          authorization: "Bearer operator-secret"
-        },
-        json: {
-          topK: 5,
-          failureRecallThreshold: 1
-        }
-      }),
-      { datasetId: "sellora-retrieval-smoke-v1" }
-    );
-
-    expect(response.status).toBe(200);
-    expect(getRetrievalBenchmarkDatasetService.getOrThrow).toHaveBeenCalledWith(
-      "sellora-retrieval-smoke-v1"
-    );
-    expect(evaluateRetrievalBenchmarkService.execute).toHaveBeenCalledWith({
-      dataset: expect.objectContaining({
-        id: "sellora-retrieval-smoke-v1"
-      }),
-      topK: 5,
-      failureRecallThreshold: 1
-    });
-    expect((await response.json()).summary.averageRecallAtK).toBe(1);
   });
 
   it("reads storefront settings within seller scope", async () => {
