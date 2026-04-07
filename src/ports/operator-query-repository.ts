@@ -2,6 +2,7 @@ import type { Order, OrderLine, FulfillmentRecord } from "../domain/orders/order
 import type { OperatorNotificationSummary } from "./notification-query-repository.js";
 import type { PaymentAttempt } from "../domain/payments/payment.js";
 import type { KeyValueRecord } from "../domain/shared/types.js";
+import type { StorefrontSettings } from "../domain/tenancy/seller.js";
 
 export interface OperatorOrderDetail {
   order: Order;
@@ -38,6 +39,7 @@ export interface OperatorShippingWebhookReceipt {
 }
 
 export interface OperatorQueryRepository {
+  getSellerStorefrontSettings(sellerId: string): Promise<StorefrontSettings | null>;
   getOrderDetail(orderId: string): Promise<OperatorOrderDetail | null>;
   listPaymentAttempts(orderId: string): Promise<PaymentAttempt[]>;
   getFulfillment(orderId: string): Promise<FulfillmentRecord | null>;

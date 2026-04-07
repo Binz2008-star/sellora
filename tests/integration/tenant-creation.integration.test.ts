@@ -80,12 +80,29 @@ describe.sequential("Tenant creation DB integration", () => {
     const persistedSeller = await prisma.seller.findUniqueOrThrow({
       where: { slug: result.seller.slug }
     });
+    const persistedStorefront = await prisma.storefrontSettings.findUniqueOrThrow({
+      where: { sellerId: result.seller.id }
+    });
+    const persistedMembership = await prisma.staffMembership.findUniqueOrThrow({
+      where: {
+        sellerId_userId: {
+          sellerId: result.seller.id,
+          userId: result.user.id
+        }
+      }
+    });
 
     expect(persistedUser.email).toBe(result.user.email);
     expect(persistedSeller.ownerUserId).toBe(result.user.id);
     expect(persistedSeller.displayName).toBe("Tenant Brand");
     expect(persistedSeller.defaultCurrency).toBe("AED");
     expect(persistedSeller.status).toBe("ACTIVE");
+    expect(persistedStorefront.brandName).toBe("Tenant Brand");
+    expect(persistedStorefront.primaryLocale).toBe("en-AE");
+    expect(persistedStorefront.supportWhatsApp).toBeNull();
+    expect(persistedMembership.role).toBe("owner");
+    expect(result.storefront.primaryLocale).toBe("en-AE");
+    expect(result.ownerMembership.role).toBe("owner");
   }, 30000);
 
   it("rolls back user creation when slug uniqueness fails", async () => {

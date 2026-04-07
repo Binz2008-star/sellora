@@ -27,9 +27,30 @@ export interface TenantSeller {
   updatedAt: string;
 }
 
+export interface TenantStorefront {
+  sellerId: string;
+  brandName: string;
+  primaryLocale: string;
+  supportPhone?: string;
+  supportWhatsApp?: string;
+  categoryKeys: string[];
+  trustPolicyIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TenantStaffMembership {
+  sellerId: string;
+  userId: string;
+  role: "owner" | "manager" | "ops" | "support";
+  createdAt: string;
+}
+
 export interface CreateTenantResult {
   user: TenantUser;
   seller: TenantSeller;
+  storefront: TenantStorefront;
+  ownerMembership: TenantStaffMembership;
 }
 
 export interface TenantRepository {

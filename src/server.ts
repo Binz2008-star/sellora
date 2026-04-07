@@ -10,12 +10,15 @@ import { PrismaPaymentRepository } from "./adapters/prisma/payment.repository.js
 import { PrismaFulfillmentRepository } from "./adapters/prisma/fulfillment.repository.js";
 import { PrismaShippingWebhookRepository } from "./adapters/prisma/shipping-webhook.repository.js";
 import { PrismaOrderLifecycleRepository } from "./adapters/prisma/order-lifecycle.repository.js";
+import { PrismaStorefrontSettingsRepository } from "./adapters/prisma/storefront-settings.repository.js";
 import { PrismaTenantRepository } from "./adapters/prisma/tenant.repository.js";
 import { AcknowledgeNotificationService } from "./application/notifications/acknowledge-notification.service.js";
 import { SendOrderNotificationService } from "./application/notifications/send-order-notification.service.js";
 import { HealthCheckService } from "./application/operations/health-check.service.js";
 import { PaymentService } from "./application/payments/payment.service.js";
 import { CreateTenantService } from "./application/tenancy/create-tenant.service.js";
+import { GetSellerStorefrontSettingsService } from "./application/tenancy/get-seller-storefront-settings.service.js";
+import { UpdateSellerStorefrontSettingsService } from "./application/tenancy/update-seller-storefront-settings.service.js";
 import { TransitionOrderService } from "./application/orders/transition-order.service.js";
 import { BookOrderShipmentService } from "./application/orders/book-order-shipment.service.js";
 import { ConfirmOrderDeliveryService } from "./application/orders/confirm-order-delivery.service.js";
@@ -94,6 +97,18 @@ function createRoutes(handlers: ReturnType<typeof createSelloraHttpHandlers>): R
       pattern: /^\/api\/admin\/tenants$/,
       buildParams: () => ({}),
       handle: (request) => handlers.createTenant(request)
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/seller\/storefront$/,
+      buildParams: () => ({}),
+      handle: (request) => handlers.getSellerStorefront(request)
+    },
+    {
+      method: "PATCH",
+      pattern: /^\/api\/seller\/storefront$/,
+      buildParams: () => ({}),
+      handle: (request) => handlers.updateSellerStorefront(request)
     },
     {
       method: "POST",
@@ -188,6 +203,7 @@ const innerEventBus = new NoopEventBus();
 const notificationRepository = new PrismaNotificationRepository();
 const notificationService = new SendOrderNotificationService(notificationRepository, notificationGateway);
 const eventBus = new NotificationFanoutEventBus(innerEventBus, notificationService);
+const storefrontSettingsRepository = new PrismaStorefrontSettingsRepository();
 const transitionOrderService = new TransitionOrderService(new PrismaOrderLifecycleRepository(), eventBus);
 const fulfillmentRepository = new PrismaFulfillmentRepository();
 const shippingGateway = createShippingGateway(config);
@@ -206,6 +222,8 @@ const handlers = createSelloraHttpHandlers({
   operatorQueryRepository: new PrismaOperatorQueryRepository(),
   notificationQueryRepository: new PrismaNotificationQueryRepository(),
   createTenantService: new CreateTenantService(new PrismaTenantRepository()),
+  getSellerStorefrontSettingsService: new GetSellerStorefrontSettingsService(storefrontSettingsRepository),
+  updateSellerStorefrontSettingsService: new UpdateSellerStorefrontSettingsService(storefrontSettingsRepository),
   acknowledgeNotificationService: new AcknowledgeNotificationService(notificationRepository),
   healthCheckService: new HealthCheckService(config, async () => {
     await prisma.$queryRaw`SELECT 1`;
