@@ -18,7 +18,10 @@ export interface StorefrontSettings {
   primaryLocale: string;
   supportPhone?: string;
   supportWhatsApp?: string;
+  categoryKeys: string[];
   trustPolicyIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface StaffRoleAssignment {

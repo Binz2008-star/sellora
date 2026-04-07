@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { handleKarrioWebhookRequest } from "../../application/fulfillment/handle-karrio-webhook.request.js";
+import type { EvaluateRetrievalBenchmarkService } from "../../application/retrieval/evaluate-retrieval-benchmark.service.js";
+import type { GetRetrievalBenchmarkDatasetService } from "../../application/retrieval/get-retrieval-benchmark-dataset.service.js";
+import type { RunRetrievalQueryService } from "../../application/retrieval/run-retrieval-query.service.js";
 import type { CreateTenantService } from "../../application/tenancy/create-tenant.service.js";
+import type { GetSellerStorefrontSettingsService } from "../../application/tenancy/get-seller-storefront-settings.service.js";
+import type { UpdateSellerStorefrontSettingsService } from "../../application/tenancy/update-seller-storefront-settings.service.js";
 import type { AcknowledgeNotificationService } from "../../application/notifications/acknowledge-notification.service.js";
 import type { BookOrderShipmentService } from "../../application/orders/book-order-shipment.service.js";
 import type { ConfirmOrderDeliveryService } from "../../application/orders/confirm-order-delivery.service.js";
@@ -76,14 +81,89 @@ const createTenantSchema = z.object({
   currency: z.string().trim().min(3).max(3).optional()
 });
 
+const retrievalDocumentSchema = z.object({
+  id: z.string().min(1),
+  language: z.string().trim().min(2),
+  title: z.string().trim().min(1).optional(),
+  body: z.string().trim().min(1),
+  metadata: keyValueRecordSchema.optional()
+});
+
+const retrievalQuerySchema = z.object({
+  query: z.string().trim().min(1),
+  language: z.string().trim().min(2).optional(),
+  topK: z.number().int().positive().max(100).optional(),
+  corpus: z.array(retrievalDocumentSchema).min(1)
+});
+
+const retrievalBenchmarkSchema = z.object({
+  dataset: z.object({
+    id: z.string().min(1).optional(),
+    name: z.string().trim().min(1),
+    description: z.string().trim().min(1).optional(),
+    useCases: z.array(z.enum(["support_search", "help_center_grounding", "catalog_candidate_retrieval"])).optional(),
+    corpus: z.array(retrievalDocumentSchema).min(1),
+    cases: z.array(
+      z.object({
+        id: z.string().min(1),
+        query: z.string().trim().min(1),
+        language: z.string().trim().min(2),
+        useCase: z.enum(["support_search", "help_center_grounding", "catalog_candidate_retrieval"]).optional(),
+        relevantDocumentIds: z.array(z.string().min(1)).min(1),
+        expectedPrimaryDocumentId: z.string().min(1).optional(),
+        tags: z.array(z.string().trim().min(1)).optional()
+      })
+    ).min(1)
+  }),
+  topK: z.number().int().positive().max(100),
+  failureRecallThreshold: z.number().min(0).max(1).optional()
+});
+
+const retrievalBenchmarkLookupParamsSchema = z.object({
+  datasetId: z.string().trim().min(1)
+});
+
+const retrievalBenchmarkByIdSchema = z.object({
+  topK: z.number().int().positive().max(100),
+  failureRecallThreshold: z.number().min(0).max(1).optional()
+});
+
+const storefrontPatchSchema = z.object({
+  brandName: z.string().trim().min(1).optional(),
+  primaryLocale: z.string().trim().min(2).optional(),
+  supportPhone: z.string().nullable().optional(),
+  supportWhatsApp: z.string().nullable().optional(),
+  categoryKeys: z.array(z.string().trim().min(1)).optional(),
+  trustPolicyIds: z.array(z.string().trim().min(1)).optional()
+});
+
 type OrderPathParams = z.infer<typeof orderPathParamsSchema>;
 type NotificationPathParams = z.infer<typeof notificationPathParamsSchema>;
+
+function normalizeBenchmarkDataset(dataset: z.infer<typeof retrievalBenchmarkSchema>["dataset"]) {
+  return {
+    id: dataset.id ?? dataset.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    name: dataset.name,
+    description: dataset.description ?? `Ad hoc retrieval benchmark dataset: ${dataset.name}`,
+    useCases: dataset.useCases ?? ["support_search"],
+    corpus: dataset.corpus,
+    cases: dataset.cases.map((benchmarkCase) => ({
+      ...benchmarkCase,
+      useCase: benchmarkCase.useCase ?? dataset.useCases?.[0] ?? "support_search"
+    }))
+  };
+}
 
 export interface SelloraHttpHandlerDependencies {
   accessRepository: HttpAccessRepository;
   operatorQueryRepository: OperatorQueryRepository;
   notificationQueryRepository: NotificationQueryRepository;
   createTenantService: Pick<CreateTenantService, "execute">;
+  runRetrievalQueryService: Pick<RunRetrievalQueryService, "execute">;
+  evaluateRetrievalBenchmarkService: Pick<EvaluateRetrievalBenchmarkService, "execute">;
+  getRetrievalBenchmarkDatasetService: Pick<GetRetrievalBenchmarkDatasetService, "list" | "getOrThrow">;
+  getSellerStorefrontSettingsService: Pick<GetSellerStorefrontSettingsService, "execute">;
+  updateSellerStorefrontSettingsService: Pick<UpdateSellerStorefrontSettingsService, "execute">;
   acknowledgeNotificationService: Pick<AcknowledgeNotificationService, "execute">;
   healthCheckService: Pick<HealthCheckService, "getHealth" | "getReadiness">;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
@@ -100,6 +180,11 @@ export const SELLORA_HTTP_ENDPOINTS = {
   health: "/health",
   readiness: "/ready",
   createTenant: "/api/admin/tenants",
+  listRetrievalBenchmarks: "/api/admin/retrieval/benchmarks",
+  retrievalQuery: "/api/admin/retrieval/query",
+  retrievalBenchmark: "/api/admin/retrieval/benchmark/evaluate",
+  retrievalBenchmarkById: "/api/admin/retrieval/benchmark/evaluate/:datasetId",
+  sellerStorefront: "/api/seller/storefront",
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
   listNotifications: "/api/notifications",
@@ -150,6 +235,8 @@ export function createSelloraHttpHandlers(
   const requireOrderParams = (params: unknown): OrderPathParams => orderPathParamsSchema.parse(params);
   const requireNotificationParams = (params: unknown): NotificationPathParams =>
     notificationPathParamsSchema.parse(params);
+  const requireRetrievalBenchmarkLookupParams = (params: unknown) =>
+    retrievalBenchmarkLookupParamsSchema.parse(params);
 
   return {
     health: () =>
@@ -171,6 +258,82 @@ export function createSelloraHttpHandlers(
 
         return jsonResponse(201, {
           tenant: result
+        });
+      }),
+
+    listRetrievalBenchmarks: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.listRetrievalBenchmarks, async () => {
+        requireAdminAuth(request, dependencies.operatorApiToken);
+
+        return jsonResponse(200, {
+          datasets: dependencies.getRetrievalBenchmarkDatasetService.list()
+        });
+      }),
+
+    runRetrievalQuery: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.retrievalQuery, async () => {
+        requireAdminAuth(request, dependencies.operatorApiToken);
+        const body = await parseJsonBody(request, retrievalQuerySchema);
+        const result = await dependencies.runRetrievalQueryService.execute(body);
+
+        return jsonResponse(200, {
+          result
+        });
+      }),
+
+    evaluateRetrievalBenchmark: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.retrievalBenchmark, async () => {
+        requireAdminAuth(request, dependencies.operatorApiToken);
+        const body = await parseJsonBody(request, retrievalBenchmarkSchema);
+        const summary = await dependencies.evaluateRetrievalBenchmarkService.execute({
+          dataset: normalizeBenchmarkDataset(body.dataset),
+          topK: body.topK,
+          failureRecallThreshold: body.failureRecallThreshold
+        });
+
+        return jsonResponse(200, {
+          summary
+        });
+      }),
+
+    evaluateBuiltInRetrievalBenchmark: (request: Request, params: unknown) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.retrievalBenchmarkById, async () => {
+        requireAdminAuth(request, dependencies.operatorApiToken);
+        const path = requireRetrievalBenchmarkLookupParams(params);
+        const body = await parseJsonBody(request, retrievalBenchmarkByIdSchema);
+        const dataset = dependencies.getRetrievalBenchmarkDatasetService.getOrThrow(path.datasetId);
+        const summary = await dependencies.evaluateRetrievalBenchmarkService.execute({
+          dataset,
+          topK: body.topK,
+          failureRecallThreshold: body.failureRecallThreshold
+        });
+
+        return jsonResponse(200, {
+          summary
+        });
+      }),
+
+    getSellerStorefront: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.sellerStorefront, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const storefront = await dependencies.getSellerStorefrontSettingsService.execute(actor.sellerId);
+
+        return jsonResponse(200, {
+          storefront
+        });
+      }),
+
+    updateSellerStorefront: (request: Request) =>
+      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.sellerStorefront, async () => {
+        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
+        const patch = await parseJsonBody(request, storefrontPatchSchema);
+        const storefront = await dependencies.updateSellerStorefrontSettingsService.execute({
+          sellerId: actor.sellerId,
+          ...patch
+        });
+
+        return jsonResponse(200, {
+          storefront
         });
       }),
 

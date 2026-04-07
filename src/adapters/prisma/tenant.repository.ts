@@ -5,6 +5,8 @@ import type {
   CreateTenantResult,
   TenantRepository,
   TenantSeller,
+  TenantStaffMembership,
+  TenantStorefront,
   TenantUser
 } from "../../ports/tenant-repository.js";
 
@@ -30,6 +32,25 @@ type SellerRecord = {
   updatedAt: Date;
 };
 
+type StorefrontRecord = {
+  sellerId: string;
+  brandName: string;
+  primaryLocale: string;
+  supportPhone: string | null;
+  supportWhatsApp: string | null;
+  categoryKeys: unknown;
+  trustPolicyIds: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type StaffMembershipRecord = {
+  sellerId: string;
+  userId: string;
+  role: string;
+  createdAt: Date;
+};
+
 function mapUser(record: UserRecord): TenantUser {
   return {
     id: record.id,
@@ -39,6 +60,10 @@ function mapUser(record: UserRecord): TenantUser {
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
   };
+}
+
+function mapStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
 function mapSeller(record: SellerRecord): TenantSeller {
@@ -51,6 +76,29 @@ function mapSeller(record: SellerRecord): TenantSeller {
     defaultCurrency: record.defaultCurrency,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString()
+  };
+}
+
+function mapStorefront(record: StorefrontRecord): TenantStorefront {
+  return {
+    sellerId: record.sellerId,
+    brandName: record.brandName,
+    primaryLocale: record.primaryLocale,
+    supportPhone: record.supportPhone ?? undefined,
+    supportWhatsApp: record.supportWhatsApp ?? undefined,
+    categoryKeys: mapStringArray(record.categoryKeys),
+    trustPolicyIds: mapStringArray(record.trustPolicyIds),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  };
+}
+
+function mapOwnerMembership(record: StaffMembershipRecord): TenantStaffMembership {
+  return {
+    sellerId: record.sellerId,
+    userId: record.userId,
+    role: record.role as TenantStaffMembership["role"],
+    createdAt: record.createdAt.toISOString()
   };
 }
 
@@ -92,9 +140,29 @@ export class PrismaTenantRepository implements TenantRepository {
           }
         });
 
+        const storefront = await tx.storefrontSettings.create({
+          data: {
+            sellerId: seller.id,
+            brandName: input.brandName,
+            supportWhatsApp: input.whatsappNumber,
+            categoryKeys: [],
+            trustPolicyIds: []
+          }
+        });
+
+        const ownerMembership = await tx.staffMembership.create({
+          data: {
+            sellerId: seller.id,
+            userId: user.id,
+            role: "owner"
+          }
+        });
+
         return {
           user: mapUser(user as UserRecord),
-          seller: mapSeller(seller as SellerRecord)
+          seller: mapSeller(seller as SellerRecord),
+          storefront: mapStorefront(storefront as StorefrontRecord),
+          ownerMembership: mapOwnerMembership(ownerMembership as StaffMembershipRecord)
         };
       });
     } catch (error) {

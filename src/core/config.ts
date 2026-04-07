@@ -21,6 +21,11 @@ const envSchema = z.object({
   APP_HOST: z.string().default("0.0.0.0"),
   APP_PORT: z.coerce.number().int().positive().default(3000),
   DEFAULT_CURRENCY: z.string().default("AED"),
+  RETRIEVAL_PROVIDER: z.enum(["lexical", "huggingface"]).default("lexical"),
+  RETRIEVAL_TOP_K_DEFAULT: z.coerce.number().int().positive().default(10),
+  HUGGINGFACE_API_TOKEN: optionalNonEmptyString(),
+  HUGGINGFACE_EMBEDDINGS_URL: z.string().url().optional(),
+  HUGGINGFACE_EMBEDDINGS_MODEL: z.string().default("intfloat/multilingual-e5-small"),
   OPERATOR_API_TOKEN: z.string().min(1).optional(),
   PAYMENT_WEBHOOK_SECRET: z.string().min(1).optional(),
   KARRIO_WEBHOOK_SECRET: z.string().min(1).optional(),
@@ -125,6 +130,14 @@ const envSchema = z.object({
         message: "NOTIFICATION_FROM_EMAIL is required when NOTIFICATION_PROVIDER is resend"
       });
     }
+  }
+
+  if (value.RETRIEVAL_PROVIDER === "huggingface" && !value.HUGGINGFACE_EMBEDDINGS_URL) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["HUGGINGFACE_EMBEDDINGS_URL"],
+      message: "HUGGINGFACE_EMBEDDINGS_URL is required when RETRIEVAL_PROVIDER is huggingface"
+    });
   }
 });
 

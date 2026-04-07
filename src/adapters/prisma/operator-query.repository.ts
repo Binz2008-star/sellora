@@ -2,6 +2,7 @@ import { prisma } from "../../core/db/prisma.js";
 import type { FulfillmentRecord, Order, OrderLine } from "../../domain/orders/order.js";
 import type { PaymentAttempt } from "../../domain/payments/payment.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
+import type { StorefrontSettings } from "../../domain/tenancy/seller.js";
 import type { OperatorNotificationSummary } from "../../ports/notification-query-repository.js";
 import type {
   OperatorOrderDetail,
@@ -103,6 +104,18 @@ type NotificationRecord = {
   order: {
     orderNumber: string;
   };
+};
+
+type StorefrontRecord = {
+  sellerId: string;
+  brandName: string;
+  primaryLocale: string;
+  supportPhone: string | null;
+  supportWhatsApp: string | null;
+  categoryKeys: unknown;
+  trustPolicyIds: unknown;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 function mapOrder(record: OrderRecord): Order {
@@ -229,7 +242,33 @@ function mapNotification(record: NotificationRecord): OperatorNotificationSummar
   };
 }
 
+function mapStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function mapStorefront(record: StorefrontRecord): StorefrontSettings {
+  return {
+    sellerId: record.sellerId,
+    brandName: record.brandName,
+    primaryLocale: record.primaryLocale,
+    supportPhone: record.supportPhone ?? undefined,
+    supportWhatsApp: record.supportWhatsApp ?? undefined,
+    categoryKeys: mapStringArray(record.categoryKeys),
+    trustPolicyIds: mapStringArray(record.trustPolicyIds),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString()
+  };
+}
+
 export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
+  async getSellerStorefrontSettings(sellerId: string): Promise<StorefrontSettings | null> {
+    const record = await prisma.storefrontSettings.findUnique({
+      where: { sellerId }
+    });
+
+    return record ? mapStorefront(record as unknown as StorefrontRecord) : null;
+  }
+
   async getOrderDetail(orderId: string): Promise<OperatorOrderDetail | null> {
     const record = await prisma.order.findUnique({
       where: { id: orderId },

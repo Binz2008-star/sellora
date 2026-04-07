@@ -1,0 +1,200 @@
+{
+  "id": "sellora-retrieval-benchmark-v1.1",
+  "name": "Sellora Retrieval Benchmark v1.1",
+  "description": "Internal benchmark for support search, help-center grounding, and catalog candidate retrieval across English, Arabic, mixed-script commerce text, and near-duplicate distractors.",
+  "useCases": [
+    "support_search",
+    "help_center_grounding",
+    "catalog_candidate_retrieval"
+  ],
+  "corpus": [
+    {
+      "id": "support_refunds_en",
+      "language": "en",
+      "title": "Refunds for duplicate card charges",
+      "body": "Use this guide when a customer was charged twice or needs a refund after a failed payment authorization."
+    },
+    {
+      "id": "support_refund_policy_en",
+      "language": "en",
+      "title": "Return policy and approved refunds",
+      "body": "Explains general return eligibility windows, approved refunds, and cases where the merchant must reject the request."
+    },
+    {
+      "id": "support_tracking_en",
+      "language": "en",
+      "title": "Track a shipped order",
+      "body": "Operators can inspect booking references, webhook receipts, and courier tracking numbers to answer shipment status questions."
+    },
+    {
+      "id": "support_tracking_delay_en",
+      "language": "en",
+      "title": "Delayed courier handoff",
+      "body": "Use this troubleshooting note when an order is packed but the courier has not scanned the parcel yet."
+    },
+    {
+      "id": "help_cod_ar",
+      "language": "ar",
+      "title": "سياسة الدفع عند الاستلام",
+      "body": "يشرح هذا المستند متى يكون الدفع عند الاستلام متاحا ومتى يتم تعطيله للطلبات عالية المخاطر."
+    },
+    {
+      "id": "help_cod_limits_ar",
+      "language": "ar",
+      "title": "حدود الدفع عند الاستلام",
+      "body": "يوضح هذا الدليل حدود قيمة الطلبات المسموح لها بالدفع عند الاستلام وبعض قيود المناطق."
+    },
+    {
+      "id": "help_whatsapp_ar",
+      "language": "ar",
+      "title": "ربط واتساب الدعم بالواجهة",
+      "body": "يوضح هذا الدليل كيفية تحديث رقم واتساب الدعم من إعدادات المتجر ليظهر للعملاء في صفحة المتجر."
+    },
+    {
+      "id": "help_storefront_phone_ar",
+      "language": "ar",
+      "title": "تحديث رقم هاتف المتجر",
+      "body": "هذا المستند يشرح تغيير رقم الهاتف الظاهر في معلومات المتجر وليس رقم واتساب."
+    },
+    {
+      "id": "catalog_iphone_15_ar",
+      "language": "ar",
+      "title": "آيفون 15 برو 256 جيجا تيتانيوم طبيعي",
+      "body": "هاتف آيفون 15 برو بسعة 256 جيجابايت ولون تيتانيوم طبيعي مع شريحة eSIM ودعم شبكة الجيل الخامس.",
+      "metadata": {
+        "skuFamily": "iphone-15-pro",
+        "brand": "Apple",
+        "storageGb": 256
+      }
+    },
+    {
+      "id": "catalog_iphone_15_blue_ar",
+      "language": "ar",
+      "title": "آيفون 15 برو 256 جيجا تيتانيوم أزرق",
+      "body": "هاتف آيفون 15 برو بنفس السعة لكن بلون تيتانيوم أزرق.",
+      "metadata": {
+        "skuFamily": "iphone-15-pro",
+        "brand": "Apple",
+        "storageGb": 256
+      }
+    },
+    {
+      "id": "catalog_iphone_15_128_ar",
+      "language": "ar",
+      "title": "آيفون 15 برو 128 جيجا تيتانيوم طبيعي",
+      "body": "هاتف آيفون 15 برو بسعة 128 جيجابايت ولون تيتانيوم طبيعي.",
+      "metadata": {
+        "skuFamily": "iphone-15-pro",
+        "brand": "Apple",
+        "storageGb": 128
+      }
+    },
+    {
+      "id": "catalog_samsung_buds_en",
+      "language": "en",
+      "title": "Samsung Galaxy Buds3 Pro Silver",
+      "body": "Wireless earbuds with ANC, silver finish, and charging case for Galaxy ecosystem users.",
+      "metadata": {
+        "skuFamily": "galaxy-buds3-pro",
+        "brand": "Samsung",
+        "color": "silver"
+      }
+    },
+    {
+      "id": "catalog_samsung_buds_white_en",
+      "language": "en",
+      "title": "Samsung Galaxy Buds3 Pro White",
+      "body": "Wireless earbuds with ANC in white finish and charging case.",
+      "metadata": {
+        "skuFamily": "galaxy-buds3-pro",
+        "brand": "Samsung",
+        "color": "white"
+      }
+    },
+    {
+      "id": "catalog_samsung_buds_base_en",
+      "language": "en",
+      "title": "Samsung Galaxy Buds3 Silver",
+      "body": "Base Galaxy Buds3 earbuds in silver without Pro features.",
+      "metadata": {
+        "skuFamily": "galaxy-buds3",
+        "brand": "Samsung",
+        "color": "silver"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "case_refund_duplicate_charge_en",
+      "query": "customer charged twice refund payment",
+      "language": "en",
+      "useCase": "support_search",
+      "relevantDocumentIds": ["support_refunds_en"],
+      "expectedPrimaryDocumentId": "support_refunds_en",
+      "tags": ["support", "payments", "refunds"]
+    },
+    {
+      "id": "case_tracking_status_en",
+      "query": "where is the shipped order tracking number",
+      "language": "en",
+      "useCase": "support_search",
+      "relevantDocumentIds": ["support_tracking_en"],
+      "expectedPrimaryDocumentId": "support_tracking_en",
+      "tags": ["support", "shipping"]
+    },
+    {
+      "id": "case_cod_policy_ar",
+      "query": "متى يتوقف الدفع عند الاستلام",
+      "language": "ar",
+      "useCase": "help_center_grounding",
+      "relevantDocumentIds": ["help_cod_ar"],
+      "expectedPrimaryDocumentId": "help_cod_ar",
+      "tags": ["help_center", "payments", "cod"]
+    },
+    {
+      "id": "case_whatsapp_setup_ar",
+      "query": "كيف أغير رقم واتساب الدعم في المتجر",
+      "language": "ar",
+      "useCase": "help_center_grounding",
+      "relevantDocumentIds": ["help_whatsapp_ar"],
+      "expectedPrimaryDocumentId": "help_whatsapp_ar",
+      "tags": ["help_center", "storefront"]
+    },
+    {
+      "id": "case_catalog_iphone_mixed",
+      "query": "iphone 15 pro 256 natural titanium",
+      "language": "en",
+      "useCase": "catalog_candidate_retrieval",
+      "relevantDocumentIds": ["catalog_iphone_15_ar"],
+      "expectedPrimaryDocumentId": "catalog_iphone_15_ar",
+      "tags": ["catalog", "matching", "mixed_script"]
+    },
+    {
+      "id": "case_catalog_iphone_ar_storage",
+      "query": "ايفون 15 برو طبيعي 128",
+      "language": "ar",
+      "useCase": "catalog_candidate_retrieval",
+      "relevantDocumentIds": ["catalog_iphone_15_128_ar"],
+      "expectedPrimaryDocumentId": "catalog_iphone_15_128_ar",
+      "tags": ["catalog", "matching", "storage"]
+    },
+    {
+      "id": "case_catalog_buds_en",
+      "query": "samsung buds pro silver earbuds",
+      "language": "en",
+      "useCase": "catalog_candidate_retrieval",
+      "relevantDocumentIds": ["catalog_samsung_buds_en"],
+      "expectedPrimaryDocumentId": "catalog_samsung_buds_en",
+      "tags": ["catalog", "matching"]
+    },
+    {
+      "id": "case_catalog_buds_white_en",
+      "query": "galaxy buds 3 pro white",
+      "language": "en",
+      "useCase": "catalog_candidate_retrieval",
+      "relevantDocumentIds": ["catalog_samsung_buds_white_en"],
+      "expectedPrimaryDocumentId": "catalog_samsung_buds_white_en",
+      "tags": ["catalog", "matching", "color"]
+    }
+  ]
+}
