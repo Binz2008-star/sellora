@@ -51,6 +51,13 @@ type StaffMembershipRecord = {
   createdAt: Date;
 };
 
+type PrismaConflictError = {
+  code?: unknown;
+  meta?: {
+    target?: unknown;
+  };
+};
+
 function mapUser(record: UserRecord): TenantUser {
   return {
     id: record.id,
@@ -102,7 +109,16 @@ function mapOwnerMembership(record: StaffMembershipRecord): TenantStaffMembershi
   };
 }
 
-function mapTenantConflict(error: Prisma.PrismaClientKnownRequestError): Error {
+function isUniqueConstraintError(error: unknown): error is PrismaConflictError {
+  return (
+    !!error &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as PrismaConflictError).code === "P2002"
+  );
+}
+
+function mapTenantConflict(error: PrismaConflictError): Error {
   const target = Array.isArray(error.meta?.target)
     ? error.meta.target.join(",")
     : String(error.meta?.target ?? "");
@@ -166,7 +182,7 @@ export class PrismaTenantRepository implements TenantRepository {
         };
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (isUniqueConstraintError(error)) {
         throw mapTenantConflict(error);
       }
 

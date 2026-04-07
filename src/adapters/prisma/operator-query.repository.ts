@@ -118,6 +118,43 @@ type StorefrontRecord = {
   updatedAt: Date;
 };
 
+type OrderEventRecord = {
+  id: string;
+  eventType: string;
+  payloadJson: unknown;
+  createdAt: Date;
+};
+
+type ShippingWebhookReceiptRecord = {
+  id: string;
+  provider: string;
+  eventType: string;
+  idempotencyKey: string;
+  providerReference: string | null;
+  trackingNumber: string | null;
+  normalizedStatus: OperatorShippingWebhookReceipt["normalizedStatus"];
+  rawPayloadJson: unknown;
+  receivedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type NotificationLogClient = {
+  notificationLog: {
+    findMany(args: {
+      where: { orderId: string };
+      include: {
+        order: {
+          select: {
+            orderNumber: true;
+          };
+        };
+      };
+      orderBy: Array<{ createdAt: "desc" }>;
+    }): Promise<NotificationRecord[]>;
+  };
+};
+
 function mapOrder(record: OrderRecord): Order {
   return {
     id: record.id,
@@ -294,7 +331,7 @@ export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
         city: record.customer.city ?? undefined,
         addressText: record.customer.addressText ?? undefined
       },
-      lines: record.lines.map((line) =>
+      lines: record.lines.map((line: unknown) =>
         mapOrderLine(line as unknown as OrderLineRecord, record.currency)
       )
     };
@@ -306,7 +343,7 @@ export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
       orderBy: { createdAt: "asc" }
     });
 
-    return records.map((record) => mapPaymentAttempt(record as unknown as PaymentAttemptRecord));
+    return records.map((record: unknown) => mapPaymentAttempt(record as PaymentAttemptRecord));
   }
 
   async getFulfillment(orderId: string): Promise<FulfillmentRecord | null> {
@@ -327,12 +364,16 @@ export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
       orderBy: { createdAt: "asc" }
     });
 
-    return records.map((record) => ({
-      id: record.id,
-      eventType: record.eventType,
-      payload: (record.payloadJson as KeyValueRecord | null) ?? undefined,
-      createdAt: record.createdAt.toISOString()
-    }));
+    return records.map((record: unknown) => {
+      const orderEvent = record as OrderEventRecord;
+
+      return {
+        id: orderEvent.id,
+        eventType: orderEvent.eventType,
+        payload: (orderEvent.payloadJson as KeyValueRecord | null) ?? undefined,
+        createdAt: orderEvent.createdAt.toISOString()
+      };
+    });
   }
 
   async listShippingWebhookReceipts(orderId: string): Promise<OperatorShippingWebhookReceipt[]> {
@@ -341,23 +382,27 @@ export class PrismaOperatorQueryRepository implements OperatorQueryRepository {
       orderBy: [{ receivedAt: "desc" }, { createdAt: "desc" }]
     });
 
-    return records.map((record) => ({
-      id: record.id,
-      provider: record.provider,
-      eventType: record.eventType,
-      idempotencyKey: record.idempotencyKey,
-      providerReference: record.providerReference ?? undefined,
-      trackingNumber: record.trackingNumber ?? undefined,
-      normalizedStatus: record.normalizedStatus,
-      rawPayload: record.rawPayloadJson as KeyValueRecord,
-      receivedAt: record.receivedAt.toISOString(),
-      createdAt: record.createdAt.toISOString(),
-      updatedAt: record.updatedAt.toISOString()
-    }));
+    return records.map((record: unknown) => {
+      const receipt = record as ShippingWebhookReceiptRecord;
+
+      return {
+        id: receipt.id,
+        provider: receipt.provider,
+        eventType: receipt.eventType,
+        idempotencyKey: receipt.idempotencyKey,
+        providerReference: receipt.providerReference ?? undefined,
+        trackingNumber: receipt.trackingNumber ?? undefined,
+        normalizedStatus: receipt.normalizedStatus,
+        rawPayload: receipt.rawPayloadJson as KeyValueRecord,
+        receivedAt: receipt.receivedAt.toISOString(),
+        createdAt: receipt.createdAt.toISOString(),
+        updatedAt: receipt.updatedAt.toISOString()
+      };
+    });
   }
 
   async listNotificationsByOrder(orderId: string): Promise<OperatorNotificationSummary[]> {
-    const client = prisma as any;
+    const client = prisma as unknown as NotificationLogClient;
     const records = await client.notificationLog.findMany({
       where: { orderId },
       include: {

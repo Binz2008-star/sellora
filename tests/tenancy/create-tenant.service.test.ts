@@ -89,4 +89,27 @@ describe("CreateTenantService", () => {
       currency: "AED"
     });
   });
+
+  it("drops blank optional tenant fields while preserving the default currency", async () => {
+    const repository = new FakeTenantRepository();
+    const service = new CreateTenantService(repository);
+
+    await service.execute({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller Brand",
+      slug: "seller-one",
+      whatsappNumber: "   ",
+      currency: "   "
+    });
+
+    expect(repository.createTenant).toHaveBeenCalledWith({
+      email: "seller@sellora.test",
+      fullName: "Seller One",
+      brandName: "Seller Brand",
+      slug: "seller-one",
+      whatsappNumber: undefined,
+      currency: "AED"
+    });
+  });
 });

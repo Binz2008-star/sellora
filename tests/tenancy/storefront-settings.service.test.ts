@@ -33,6 +33,16 @@ describe("Seller storefront settings services", () => {
     expect(storefront.sellerId).toBe("seller_1");
   });
 
+  it("fails with a not-found error when storefront settings are missing", async () => {
+    const repository = new FakeStorefrontSettingsRepository();
+    repository.getBySellerId.mockResolvedValueOnce(null);
+    const service = new GetSellerStorefrontSettingsService(repository);
+
+    await expect(service.execute("seller_missing")).rejects.toThrow(
+      "Storefront settings not found for seller seller_missing"
+    );
+  });
+
   it("normalizes editable storefront patch fields before persistence", async () => {
     const repository = new FakeStorefrontSettingsRepository();
     const service = new UpdateSellerStorefrontSettingsService(repository);

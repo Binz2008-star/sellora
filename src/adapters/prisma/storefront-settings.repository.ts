@@ -45,6 +45,14 @@ export class PrismaStorefrontSettingsRepository implements StorefrontSettingsRep
   }
 
   async updateBySellerId(input: UpdateStorefrontSettingsInput): Promise<StorefrontSettings> {
+    const existing = await prisma.storefrontSettings.findUnique({
+      where: { sellerId: input.sellerId }
+    });
+
+    if (!existing) {
+      throw new Error(`Storefront settings not found for seller ${input.sellerId}`);
+    }
+
     const record = await prisma.storefrontSettings.update({
       where: { sellerId: input.sellerId },
       data: {
