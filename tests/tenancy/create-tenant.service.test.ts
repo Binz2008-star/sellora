@@ -21,23 +21,6 @@ class FakeTenantRepository implements TenantRepository {
       defaultCurrency: input.currency ?? "AED",
       createdAt: "2026-04-07T00:00:00.000Z",
       updatedAt: "2026-04-07T00:00:00.000Z"
-    },
-    storefront: {
-      sellerId: "seller_1",
-      brandName: input.brandName,
-      primaryLocale: "en-AE",
-      supportPhone: undefined,
-      supportWhatsApp: input.whatsappNumber,
-      categoryKeys: [],
-      trustPolicyIds: [],
-      createdAt: "2026-04-07T00:00:00.000Z",
-      updatedAt: "2026-04-07T00:00:00.000Z"
-    },
-    ownerMembership: {
-      sellerId: "seller_1",
-      userId: "user_1",
-      role: "owner",
-      createdAt: "2026-04-07T00:00:00.000Z"
     }
   } satisfies CreateTenantResult));
 }
@@ -65,8 +48,6 @@ describe("CreateTenantService", () => {
       currency: "USD"
     });
     expect(result.seller.defaultCurrency).toBe("USD");
-    expect(result.storefront.supportWhatsApp).toBe("+971500000001");
-    expect(result.ownerMembership.role).toBe("owner");
   });
 
   it("defaults tenant currency to AED when omitted", async () => {

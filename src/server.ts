@@ -10,7 +10,6 @@ import { PrismaPaymentRepository } from "./adapters/prisma/payment.repository.js
 import { PrismaFulfillmentRepository } from "./adapters/prisma/fulfillment.repository.js";
 import { PrismaShippingWebhookRepository } from "./adapters/prisma/shipping-webhook.repository.js";
 import { PrismaOrderLifecycleRepository } from "./adapters/prisma/order-lifecycle.repository.js";
-import { PrismaStorefrontSettingsRepository } from "./adapters/prisma/storefront-settings.repository.js";
 import { PrismaTenantRepository } from "./adapters/prisma/tenant.repository.js";
 import { AcknowledgeNotificationService } from "./application/notifications/acknowledge-notification.service.js";
 import { SendOrderNotificationService } from "./application/notifications/send-order-notification.service.js";
@@ -20,8 +19,6 @@ import { EvaluateRetrievalBenchmarkService } from "./application/retrieval/evalu
 import { GetRetrievalBenchmarkDatasetService } from "./application/retrieval/get-retrieval-benchmark-dataset.service.js";
 import { RunRetrievalQueryService } from "./application/retrieval/run-retrieval-query.service.js";
 import { CreateTenantService } from "./application/tenancy/create-tenant.service.js";
-import { GetSellerStorefrontSettingsService } from "./application/tenancy/get-seller-storefront-settings.service.js";
-import { UpdateSellerStorefrontSettingsService } from "./application/tenancy/update-seller-storefront-settings.service.js";
 import { TransitionOrderService } from "./application/orders/transition-order.service.js";
 import { BookOrderShipmentService } from "./application/orders/book-order-shipment.service.js";
 import { ConfirmOrderDeliveryService } from "./application/orders/confirm-order-delivery.service.js";
@@ -127,18 +124,6 @@ function createRoutes(handlers: ReturnType<typeof createSelloraHttpHandlers>): R
       handle: (request, params) => handlers.evaluateBuiltInRetrievalBenchmark(request, params)
     },
     {
-      method: "GET",
-      pattern: /^\/api\/seller\/storefront$/,
-      buildParams: () => ({}),
-      handle: (request) => handlers.getSellerStorefront(request)
-    },
-    {
-      method: "PATCH",
-      pattern: /^\/api\/seller\/storefront$/,
-      buildParams: () => ({}),
-      handle: (request) => handlers.updateSellerStorefront(request)
-    },
-    {
       method: "POST",
       pattern: /^\/api\/payments\/attempts$/,
       buildParams: () => ({}),
@@ -233,7 +218,6 @@ const retrievalBenchmarkDatasetService = new GetRetrievalBenchmarkDatasetService
 const notificationRepository = new PrismaNotificationRepository();
 const notificationService = new SendOrderNotificationService(notificationRepository, notificationGateway);
 const eventBus = new NotificationFanoutEventBus(innerEventBus, notificationService);
-const storefrontSettingsRepository = new PrismaStorefrontSettingsRepository();
 const transitionOrderService = new TransitionOrderService(new PrismaOrderLifecycleRepository(), eventBus);
 const fulfillmentRepository = new PrismaFulfillmentRepository();
 const shippingGateway = createShippingGateway(config);
@@ -258,8 +242,6 @@ const handlers = createSelloraHttpHandlers({
   ),
   evaluateRetrievalBenchmarkService: new EvaluateRetrievalBenchmarkService(retrievalEngine),
   getRetrievalBenchmarkDatasetService: retrievalBenchmarkDatasetService,
-  getSellerStorefrontSettingsService: new GetSellerStorefrontSettingsService(storefrontSettingsRepository),
-  updateSellerStorefrontSettingsService: new UpdateSellerStorefrontSettingsService(storefrontSettingsRepository),
   acknowledgeNotificationService: new AcknowledgeNotificationService(notificationRepository),
   healthCheckService: new HealthCheckService(config, async () => {
     await prisma.$queryRaw`SELECT 1`;

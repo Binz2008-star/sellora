@@ -4,8 +4,6 @@ import type { EvaluateRetrievalBenchmarkService } from "../../application/retrie
 import type { GetRetrievalBenchmarkDatasetService } from "../../application/retrieval/get-retrieval-benchmark-dataset.service.js";
 import type { RunRetrievalQueryService } from "../../application/retrieval/run-retrieval-query.service.js";
 import type { CreateTenantService } from "../../application/tenancy/create-tenant.service.js";
-import type { GetSellerStorefrontSettingsService } from "../../application/tenancy/get-seller-storefront-settings.service.js";
-import type { UpdateSellerStorefrontSettingsService } from "../../application/tenancy/update-seller-storefront-settings.service.js";
 import type { AcknowledgeNotificationService } from "../../application/notifications/acknowledge-notification.service.js";
 import type { BookOrderShipmentService } from "../../application/orders/book-order-shipment.service.js";
 import type { ConfirmOrderDeliveryService } from "../../application/orders/confirm-order-delivery.service.js";
@@ -128,15 +126,6 @@ const retrievalBenchmarkByIdSchema = z.object({
   failureRecallThreshold: z.number().min(0).max(1).optional()
 });
 
-const storefrontPatchSchema = z.object({
-  brandName: z.string().trim().min(1).optional(),
-  primaryLocale: z.string().trim().min(2).optional(),
-  supportPhone: z.string().nullable().optional(),
-  supportWhatsApp: z.string().nullable().optional(),
-  categoryKeys: z.array(z.string().trim().min(1)).optional(),
-  trustPolicyIds: z.array(z.string().trim().min(1)).optional()
-});
-
 type OrderPathParams = z.infer<typeof orderPathParamsSchema>;
 type NotificationPathParams = z.infer<typeof notificationPathParamsSchema>;
 
@@ -162,8 +151,6 @@ export interface SelloraHttpHandlerDependencies {
   runRetrievalQueryService: Pick<RunRetrievalQueryService, "execute">;
   evaluateRetrievalBenchmarkService: Pick<EvaluateRetrievalBenchmarkService, "execute">;
   getRetrievalBenchmarkDatasetService: Pick<GetRetrievalBenchmarkDatasetService, "list" | "getOrThrow">;
-  getSellerStorefrontSettingsService: Pick<GetSellerStorefrontSettingsService, "execute">;
-  updateSellerStorefrontSettingsService: Pick<UpdateSellerStorefrontSettingsService, "execute">;
   acknowledgeNotificationService: Pick<AcknowledgeNotificationService, "execute">;
   healthCheckService: Pick<HealthCheckService, "getHealth" | "getReadiness">;
   paymentService: Pick<PaymentService, "initiatePaymentAttempt" | "markProcessing" | "markSucceeded" | "markFailed">;
@@ -184,7 +171,6 @@ export const SELLORA_HTTP_ENDPOINTS = {
   retrievalQuery: "/api/admin/retrieval/query",
   retrievalBenchmark: "/api/admin/retrieval/benchmark/evaluate",
   retrievalBenchmarkById: "/api/admin/retrieval/benchmark/evaluate/:datasetId",
-  sellerStorefront: "/api/seller/storefront",
   initiatePayment: "/api/payments/attempts",
   paymentWebhook: "/api/payments/webhooks/generic",
   listNotifications: "/api/notifications",
@@ -310,30 +296,6 @@ export function createSelloraHttpHandlers(
 
         return jsonResponse(200, {
           summary
-        });
-      }),
-
-    getSellerStorefront: (request: Request) =>
-      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.sellerStorefront, async () => {
-        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
-        const storefront = await dependencies.getSellerStorefrontSettingsService.execute(actor.sellerId);
-
-        return jsonResponse(200, {
-          storefront
-        });
-      }),
-
-    updateSellerStorefront: (request: Request) =>
-      withHttpBoundary(SELLORA_HTTP_ENDPOINTS.sellerStorefront, async () => {
-        const actor = requireOperatorAuth(request, dependencies.operatorApiToken);
-        const patch = await parseJsonBody(request, storefrontPatchSchema);
-        const storefront = await dependencies.updateSellerStorefrontSettingsService.execute({
-          sellerId: actor.sellerId,
-          ...patch
-        });
-
-        return jsonResponse(200, {
-          storefront
         });
       }),
 
