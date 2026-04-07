@@ -16,6 +16,11 @@ interface EmbeddingResponseItem {
   embedding?: number[];
 }
 
+interface EmbeddingEnvelope {
+  data?: unknown;
+  embeddings?: unknown;
+ }
+
 function dotProduct(left: number[], right: number[]): number {
   return left.reduce((sum, value, index) => sum + value * (right[index] ?? 0), 0);
 }
@@ -47,16 +52,21 @@ function formatPassageText(document: RetrievalDocument): string {
 }
 
 function asEmbeddingList(payload: unknown): number[][] {
-  if (!Array.isArray(payload)) {
+  const normalizedPayload =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as EmbeddingEnvelope).embeddings ?? (payload as EmbeddingEnvelope).data
+      : payload;
+
+  if (!Array.isArray(normalizedPayload)) {
     throw new Error("Invalid embedding response payload");
   }
 
-  if (payload.length === 0) {
+  if (normalizedPayload.length === 0) {
     return [];
   }
 
-  if (Array.isArray(payload[0])) {
-    return (payload as unknown[]).map((item) => {
+  if (Array.isArray(normalizedPayload[0])) {
+    return (normalizedPayload as unknown[]).map((item) => {
       if (!Array.isArray(item) || item.some((value) => typeof value !== "number")) {
         throw new Error("Invalid embedding vector payload");
       }
@@ -65,13 +75,23 @@ function asEmbeddingList(payload: unknown): number[][] {
     });
   }
 
-  return (payload as EmbeddingResponseItem[]).map((item) => {
+  return (normalizedPayload as EmbeddingResponseItem[]).map((item) => {
     if (!Array.isArray(item.embedding) || item.embedding.some((value) => typeof value !== "number")) {
       throw new Error("Invalid embedding object payload");
     }
 
     return item.embedding;
   });
+}
+
+function assertCompatibleEmbeddings(embeddings: number[][]): void {
+  const dimension = embeddings[0]?.length ?? 0;
+
+  for (const embedding of embeddings) {
+    if (embedding.length !== dimension) {
+      throw new Error("Embedding response contained inconsistent vector dimensions");
+    }
+  }
 }
 
 export class HuggingFaceEmbeddingRetrievalEngine implements RetrievalEngine {
@@ -114,10 +134,12 @@ export class HuggingFaceEmbeddingRetrievalEngine implements RetrievalEngine {
     const response = await this.fetchImpl(this.options.endpointUrl, {
       method: "POST",
       headers: {
+        accept: "application/json",
         "content-type": "application/json",
         ...(this.options.apiToken ? { authorization: `Bearer ${this.options.apiToken}` } : {})
       },
       body: JSON.stringify({
+        model: this.options.model,
         inputs,
         normalize: true,
         truncate: true
@@ -128,6 +150,8 @@ export class HuggingFaceEmbeddingRetrievalEngine implements RetrievalEngine {
       throw new Error(`Hugging Face embeddings request failed: ${response.status}`);
     }
 
-    return asEmbeddingList(await response.json());
+    const embeddings = asEmbeddingList(await response.json());
+    assertCompatibleEmbeddings(embeddings);
+    return embeddings;
   }
 }

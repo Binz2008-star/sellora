@@ -3,6 +3,7 @@ import type {
   RetrievalBenchmarkUseCase
 } from "../../domain/retrieval/retrieval.js";
 import type { RetrievalEngine } from "../../ports/retrieval-engine.js";
+import { validateRetrievalBenchmarkDataset } from "./retrieval-benchmark-dataset-validation.js";
 
 export interface RetrievalBenchmarkUseCaseReport {
   useCase: RetrievalBenchmarkUseCase;
@@ -59,6 +60,8 @@ export async function generateRetrievalBenchmarkReport(input: {
   engineName: string;
   topK: number;
 }): Promise<RetrievalBenchmarkReport> {
+  validateRetrievalBenchmarkDataset(input.dataset);
+
   const totals: Aggregate = {
     recallAtK: 0,
     reciprocalRank: 0,

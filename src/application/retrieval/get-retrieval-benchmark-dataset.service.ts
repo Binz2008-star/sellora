@@ -6,11 +6,16 @@ import {
   BUILT_IN_RETRIEVAL_BENCHMARK_DATASETS,
   summarizeRetrievalBenchmarkDataset
 } from "./retrieval-benchmark-catalog.js";
+import { validateRetrievalBenchmarkDataset } from "./retrieval-benchmark-dataset-validation.js";
 
 export class GetRetrievalBenchmarkDatasetService {
   constructor(
     private readonly datasets: RetrievalBenchmarkDataset[] = BUILT_IN_RETRIEVAL_BENCHMARK_DATASETS
-  ) {}
+  ) {
+    for (const dataset of this.datasets) {
+      validateRetrievalBenchmarkDataset(dataset);
+    }
+  }
 
   list(): RetrievalBenchmarkDatasetSummary[] {
     return this.datasets.map((dataset) => summarizeRetrievalBenchmarkDataset(dataset));

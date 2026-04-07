@@ -53,4 +53,36 @@ describe("EvaluateRetrievalBenchmarkService", () => {
     expect(summary.averageNdcgAtK).toBe(1);
     expect(summary.failures).toHaveLength(0);
   });
+
+  it("rejects datasets with case references that are not present in the corpus", async () => {
+    const service = new EvaluateRetrievalBenchmarkService(new LexicalRetrievalEngine());
+
+    await expect(
+      service.execute({
+        dataset: {
+          id: "invalid-dataset",
+          name: "invalid-dataset",
+          description: "Invalid benchmark",
+          useCases: ["support_search"],
+          corpus: [
+            {
+              id: "doc_1",
+              language: "en",
+              body: "Refunds for failed or duplicate payments"
+            }
+          ],
+          cases: [
+            {
+              id: "case_refund",
+              query: "refund payment",
+              language: "en",
+              useCase: "support_search",
+              relevantDocumentIds: ["missing_doc"]
+            }
+          ]
+        },
+        topK: 5
+      })
+    ).rejects.toThrow("references unknown relevant document ids");
+  });
 });

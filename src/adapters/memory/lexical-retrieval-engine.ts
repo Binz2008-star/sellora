@@ -6,11 +6,13 @@ import type {
 import type { RetrievalEngine, RetrievalSearchInput } from "../../ports/retrieval-engine.js";
 
 function tokenize(value: string): string[] {
-  return value
+  const tokens = value
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .map((token) => token.trim())
     .filter((token) => token.length > 0);
+
+  return Array.from(new Set(tokens));
 }
 
 function scoreDocument(queryTokens: string[], document: RetrievalDocument): number {
@@ -21,10 +23,9 @@ function scoreDocument(queryTokens: string[], document: RetrievalDocument): numb
 
   const haystackSet = new Set(haystack);
   const overlap = queryTokens.filter((token) => haystackSet.has(token)).length;
+  const titleTokens = document.title ? tokenize(document.title) : [];
   const exactTitleBoost =
-    document.title && queryTokens.length > 0 && tokenize(document.title).some((token) => queryTokens.includes(token))
-      ? 0.25
-      : 0;
+    titleTokens.length > 0 && queryTokens.some((token) => titleTokens.includes(token)) ? 0.25 : 0;
 
   return overlap / queryTokens.length + exactTitleBoost;
 }

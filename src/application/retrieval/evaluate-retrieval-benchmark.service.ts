@@ -4,6 +4,7 @@ import type {
   RetrievalBenchmarkSummary
 } from "../../domain/retrieval/retrieval.js";
 import type { RetrievalEngine } from "../../ports/retrieval-engine.js";
+import { validateRetrievalBenchmarkDataset } from "./retrieval-benchmark-dataset-validation.js";
 
 export interface EvaluateRetrievalBenchmarkRequest {
   dataset: RetrievalBenchmarkDataset;
@@ -31,6 +32,8 @@ export class EvaluateRetrievalBenchmarkService {
   constructor(private readonly retrievalEngine: RetrievalEngine) {}
 
   async execute(input: EvaluateRetrievalBenchmarkRequest): Promise<RetrievalBenchmarkSummary> {
+    validateRetrievalBenchmarkDataset(input.dataset);
+
     const results: RetrievalBenchmarkCaseResult[] = [];
 
     for (const benchmarkCase of input.dataset.cases) {

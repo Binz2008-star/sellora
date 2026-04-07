@@ -32,4 +32,23 @@ describe("generateRetrievalBenchmarkReport", () => {
       })
     ]);
   });
+
+  it("rejects invalid expected primary document references", async () => {
+    await expect(
+      generateRetrievalBenchmarkReport({
+        dataset: {
+          ...SELLORA_RETRIEVAL_SMOKE_DATASET,
+          cases: [
+            {
+              ...SELLORA_RETRIEVAL_SMOKE_DATASET.cases[0],
+              expectedPrimaryDocumentId: "missing_doc"
+            }
+          ]
+        },
+        engine: new LexicalRetrievalEngine(),
+        engineName: "lexical",
+        topK: 3
+      })
+    ).rejects.toThrow("expectedPrimaryDocumentId must also be listed as relevant");
+  });
 });
