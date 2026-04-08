@@ -58,7 +58,7 @@ jobs:
       run: npm run test
 
     - name: Setup Database Schema
-      run: npx prisma db push
+      run: npx prisma db push --accept-data-loss
       env:
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
