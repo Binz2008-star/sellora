@@ -146,6 +146,14 @@ enum VerificationStatus {
   NEEDS_REVIEW
 }
 
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id               String            @id @default(cuid())
   email            String            @unique
