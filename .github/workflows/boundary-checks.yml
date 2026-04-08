@@ -2,114 +2,122 @@ name: Boundary Checks
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
-  boundary-checks:
+  boundary_checks:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Check for forbidden runtime logic
-      run: |
-        echo "Checking for forbidden runtime domain leakage in sellora..."
-        
-        # Forbidden patterns that indicate runtime logic
-        FORBIDDEN_PATTERNS=(
-          "order.*create"
-          "order.*transition"
-          "order.*status.*="
-          "payment.*process"
-          "payment.*complete"
-          "payment.*refund"
-          "inventory.*reserve"
-          "inventory.*deduct"
-          "inventory.*release"
-          "auth.*login"
-          "auth.*register"
-          "jwt.*sign"
-          "session.*create"
-          "audit.*event"
-        )
-        
-        VIOLATIONS_FOUND=false
-        
-        for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
-          echo "Checking pattern: $pattern"
-          if grep -r "$pattern" src/ --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx"; then
-            echo "VIOLATION: Found forbidden pattern '$pattern'"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify Node version
+        run: node -v
+
+      - name: Verify npm version
+        run: npm -v
+
+      - name: Check for forbidden runtime logic
+        shell: bash
+        run: |
+          echo "Checking for forbidden runtime domain leakage in sellora..."
+
+          FORBIDDEN_PATTERNS=(
+            "order.*create"
+            "order.*transition"
+            "order.*status.*="
+            "payment.*process"
+            "payment.*complete"
+            "payment.*refund"
+            "inventory.*reserve"
+            "inventory.*deduct"
+            "inventory.*release"
+            "auth.*login"
+            "auth.*register"
+            "jwt.*sign"
+            "session.*create"
+            "audit.*event"
+          )
+
+          VIOLATIONS_FOUND=false
+
+          for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+            echo "Checking pattern: $pattern"
+            if grep -r "$pattern" src/ --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx"; then
+              echo "VIOLATION: Found forbidden pattern '$pattern'"
+              VIOLATIONS_FOUND=true
+            fi
+          done
+
+          if grep -r "prisma.*order" src/ --include="*.ts" --include="*.js"; then
+            echo "VIOLATION: Direct runtime database access detected"
             VIOLATIONS_FOUND=true
           fi
-        done
-        
-        # Check for direct database access patterns
-        if grep -r "prisma.*order" src/ --include="*.ts" --include="*.js"; then
-          echo "VIOLATION: Direct runtime database access detected"
-          VIOLATIONS_FOUND=true
-        fi
-        
-        if [ "$VIOLATIONS_FOUND" = true ]; then
-          echo "FAILED: Boundary violations detected"
-          echo "Review REPO_CONTRACT.md and DATA_OWNERSHIP_RULES.md"
-          exit 1
-        else
-          echo "PASSED: No boundary violations found"
-        fi
-        
-    - name: Check for proper runtime client usage
-      run: |
-        echo "Checking that runtime access goes through client..."
-        
-        # Should use runtime client for any runtime API calls
-        if grep -r "fetch.*api.*order" src/ --include="*.ts" --include="*.js" | grep -v "runtime-client"; then
-          echo "VIOLATION: Direct runtime API calls detected"
-          echo "Use src/integration/runtime-client/ for all runtime access"
-          exit 1
-        else
-          echo "PASSED: Runtime access properly channeled"
-        fi
-        
-    - name: Verify catalog ownership
-      run: |
-        echo "Checking catalog domain ownership..."
-        
-        # Should have catalog logic in sellora
-        if ! find src/ -name "*.ts" -o -name "*.js" | xargs grep -l "catalog" | head -1; then
-          echo "WARNING: No catalog logic found - verify this is intended"
-        fi
-        
-        # Should NOT have order tables in sellora schema
-        if grep -r "model.*Order" prisma/; then
-          echo "VIOLATION: Order model found in sellora schema"
-          echo "Orders belong in runtime, not platform"
-          exit 1
-        else
-          echo "PASSED: Catalog ownership verified"
-        fi
-        
-    - name: Check API endpoint classification
-      run: |
-        echo "Checking API endpoint classification..."
-        
-        # Platform should not expose command endpoints
-        COMMAND_ENDPOINTS=(
-          "POST.*orders"
-          "PATCH.*orders.*status"
-          "POST.*payments"
-          "POST.*inventory.*reserve"
-          "POST.*auth.*login"
-        )
-        
-        for endpoint in "${COMMAND_ENDPOINTS[@]}"; do
-          if grep -r "$endpoint" src/ --include="*.ts" --include="*.js"; then
-            echo "VIOLATION: Command endpoint '$endpoint' found in platform"
-            echo "Commands belong in runtime only"
+
+          if [ "$VIOLATIONS_FOUND" = true ]; then
+            echo "FAILED: Boundary violations detected"
+            echo "Review REPO_CONTRACT.md and DATA_OWNERSHIP_RULES.md"
             exit 1
+          else
+            echo "PASSED: No boundary violations found"
           fi
-        done
-        
-        echo "PASSED: API classification correct"
+
+      - name: Check for proper runtime client usage
+        shell: bash
+        run: |
+          echo "Checking that runtime access goes through client..."
+
+          if grep -r "fetch.*api.*order" src/ --include="*.ts" --include="*.js" | grep -v "runtime-client"; then
+            echo "VIOLATION: Direct runtime API calls detected"
+            echo "Use src/integration/runtime-client/ for all runtime access"
+            exit 1
+          else
+            echo "PASSED: Runtime access properly channeled"
+          fi
+
+      - name: Verify catalog ownership
+        shell: bash
+        run: |
+          echo "Checking catalog domain ownership..."
+
+          if ! find src/ \( -name "*.ts" -o -name "*.js" \) -print0 | xargs -0 grep -l "catalog" | head -1; then
+            echo "WARNING: No catalog logic found - verify this is intended"
+          fi
+
+          if grep -r "model.*Order" prisma/; then
+            echo "VIOLATION: Order model found in sellora schema"
+            echo "Orders belong in runtime, not platform"
+            exit 1
+          else
+            echo "PASSED: Catalog ownership verified"
+          fi
+
+      - name: Check API endpoint classification
+        shell: bash
+        run: |
+          echo "Checking API endpoint classification..."
+
+          COMMAND_ENDPOINTS=(
+            "POST.*orders"
+            "PATCH.*orders.*status"
+            "POST.*payments"
+            "POST.*inventory.*reserve"
+            "POST.*auth.*login"
+          )
+
+          for endpoint in "${COMMAND_ENDPOINTS[@]}"; do
+            if grep -r "$endpoint" src/ --include="*.ts" --include="*.js"; then
+              echo "VIOLATION: Command endpoint '$endpoint' found in platform"
+              echo "Commands belong in runtime only"
+              exit 1
+            fi
+          done
+
+          echo "PASSED: API classification correct"

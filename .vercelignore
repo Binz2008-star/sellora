@@ -1,0 +1,6 @@
+# Vercel should not deploy this backend repository
+# This is a platform/backend repository, not a frontend application
+
+*
+!src/fixtures
+!docs

@@ -36,38 +36,10 @@ enum InventoryMovementType {
   RETURN
 }
 
-enum OrderMode {
-  RESERVATION
-  STANDARD
-  QUOTE_CONVERSION
-}
-
-enum OrderStatus {
-  DRAFT
-  PENDING_PAYMENT
-  RESERVED
-  CONFIRMED
-  PACKING
-  SHIPPED
-  DELIVERED
-  CANCELLED
-  REFUNDED
-  EXPIRED
-}
-
 enum PaymentPolicy {
   FULL_UPFRONT
   DEPOSIT_THEN_BALANCE
   MANUAL_INVOICE
-}
-
-enum PaymentStatus {
-  PENDING
-  PROCESSING
-  AUTHORIZED
-  PAID
-  FAILED
-  REFUNDED
 }
 
 enum QuoteStatus {
@@ -174,6 +146,14 @@ enum VerificationStatus {
   NEEDS_REVIEW
 }
 
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id               String            @id @default(cuid())
   email            String            @unique
@@ -213,7 +193,6 @@ model Seller {
   autonomyPolicies     SellerAutonomyPolicy[]
   workflowRuns         WorkflowRun[]
   autonomousActions    AutonomousActionLog[]
-  orders               Order[]
   paymentAttempts      PaymentAttempt[]
   fulfillmentRecords   FulfillmentRecord[]
   shippingWebhookReceipts ShippingWebhookReceipt[]
@@ -420,7 +399,6 @@ model Product {
   media            ProductMedia[]
   offerings        ProductOffering[]
   quoteLines       QuoteLine[]
-  orderLines       OrderLine[]
   inspections      ProductInspection[]
 
   @@unique([sellerId, slug])
@@ -446,7 +424,6 @@ model ProductOffering {
   seller                Seller              @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   product               Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   sourceListing         SourceListing?      @relation(fields: [sourceListingId], references: [id], onDelete: SetNull)
-  orderLines            OrderLine[]
   inventoryMovements    InventoryMovement[]
 
   @@unique([sellerId, sku])
@@ -501,7 +478,6 @@ model Customer {
   quotes      Quote[]
   invoices    Invoice[]
   conversations ConversationThread[]
-  orders      Order[]
 
   @@index([sellerId, phone])
 }
@@ -565,7 +541,6 @@ model Invoice {
   seller           Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   quote            Quote?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  order            Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([sellerId, status])
   @@index([customerId])
@@ -602,41 +577,10 @@ model ConversationMessage {
   @@index([threadId, sentAt])
 }
 
-model Order {
-  id                   String           @id @default(cuid())
-  sellerId             String
-  customerId           String
-  orderNumber          String           @unique
-  mode                 OrderMode
-  status               OrderStatus      @default(DRAFT)
-  paymentPolicy        PaymentPolicy
-  paymentStatus        PaymentStatus    @default(PENDING)
-  subtotalMinor        Int
-  deliveryFeeMinor     Int              @default(0)
-  totalMinor           Int
-  currency             String
-  reservationExpiresAt DateTime?
-  notes                String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
-  seller               Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  customer             Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  lines                OrderLine[]
-  paymentAttempts      PaymentAttempt[]
-  events               OrderEvent[]
-  fulfillmentRecord    FulfillmentRecord?
-  notifications        NotificationLog[]
-  invoices             Invoice[]
-
-  @@index([sellerId, status])
-  @@index([customerId])
-  @@index([paymentStatus])
-}
 
 model NotificationLog {
   id                String                    @id @default(cuid())
   sellerId          String
-  orderId           String
   channel           NotificationChannel
   status            NotificationStatus        @default(PENDING)
   recipientRole     NotificationRecipientRole
@@ -656,39 +600,15 @@ model NotificationLog {
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
   seller            Seller                    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  order             Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([sellerId, createdAt])
-  @@index([orderId, createdAt])
   @@index([status, createdAt])
 }
 
-model OrderLine {
-  id             String   @id @default(cuid())
-  orderId        String
-  productId      String
-  productOfferingId String
-  titleSnapshot  String
-  quantity       Int
-  unitPriceMinor Int
-  costPriceMinor Int
-  currencySnapshot String
-  selectedAttributesSnapshot Json
-  lineTotalMinor Int
-  createdAt      DateTime @default(now())
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  productOffering ProductOffering @relation(fields: [productOfferingId], references: [id], onDelete: Restrict)
-
-  @@index([orderId])
-  @@index([productId])
-  @@index([productOfferingId])
-}
 
 model PaymentAttempt {
   id                String        @id @default(cuid())
   sellerId          String
-  orderId           String
   provider          String
   providerReference String?
   idempotencyKey    String?
@@ -700,30 +620,16 @@ model PaymentAttempt {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   seller            Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerReference])
   @@unique([sellerId, idempotencyKey])
   @@index([sellerId, status])
-  @@index([orderId])
 }
 
-model OrderEvent {
-  id          String   @id @default(cuid())
-  orderId     String
-  actorUserId String?
-  eventType   String
-  payloadJson Json?
-  createdAt   DateTime @default(now())
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId, createdAt])
-}
 
 model FulfillmentRecord {
   id             String         @id @default(cuid())
   sellerId       String
-  orderId        String         @unique
   status         ShipmentStatus @default(NOT_READY)
   bookingReference String?
   courierName    String?
@@ -737,7 +643,6 @@ model FulfillmentRecord {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   seller         Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  order          Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([sellerId, status])
 }
@@ -751,7 +656,6 @@ model ShippingWebhookReceipt {
   providerReference String?
   trackingNumber String?
   normalizedStatus String
-  orderId        String?
   rawPayloadJson Json
   receivedAt     DateTime @default(now())
   createdAt      DateTime @default(now())
@@ -760,7 +664,6 @@ model ShippingWebhookReceipt {
 
   @@index([provider, providerReference])
   @@index([provider, trackingNumber])
-  @@index([orderId])
 }
 
 model VerificationTemplate {
