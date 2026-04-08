@@ -1,0 +1,62 @@
+{
+  "version": "1.0",
+  "dataset": "retrieval-benchmark-v1",
+  "queries": [
+    {
+      "id": "q1",
+      "text": "iphone 13 pro max",
+      "category": "electronics",
+      "expected_results": ["iphone-13-pro-max-256gb", "iphone-13-pro-max-512gb", "iphone-13-pro-max-128gb"]
+    },
+    {
+      "id": "q2", 
+      "text": "samsung galaxy s21",
+      "category": "electronics",
+      "expected_results": ["samsung-galaxy-s21-5g", "samsung-galaxy-s21-plus", "samsung-galaxy-s21-ultra"]
+    },
+    {
+      "id": "q3",
+      "text": "apple macbook pro",
+      "category": "electronics", 
+      "expected_results": ["macbook-pro-14-inch", "macbook-pro-16-inch", "macbook-pro-13-inch"]
+    }
+  ],
+  "products": [
+    {
+      "id": "iphone-13-pro-max-256gb",
+      "title": "iPhone 13 Pro Max 256GB",
+      "description": "Apple iPhone 13 Pro Max with 256GB storage",
+      "category": "electronics",
+      "attributes": {
+        "brand": "Apple",
+        "model": "iPhone 13 Pro Max",
+        "storage": "256GB",
+        "color": "Graphite"
+      }
+    },
+    {
+      "id": "iphone-13-pro-max-512gb",
+      "title": "iPhone 13 Pro Max 512GB", 
+      "description": "Apple iPhone 13 Pro Max with 512GB storage",
+      "category": "electronics",
+      "attributes": {
+        "brand": "Apple",
+        "model": "iPhone 13 Pro Max", 
+        "storage": "512GB",
+        "color": "Sierra Blue"
+      }
+    },
+    {
+      "id": "samsung-galaxy-s21-5g",
+      "title": "Samsung Galaxy S21 5G",
+      "description": "Samsung Galaxy S21 with 5G connectivity",
+      "category": "electronics",
+      "attributes": {
+        "brand": "Samsung",
+        "model": "Galaxy S21",
+        "connectivity": "5G",
+        "storage": "128GB"
+      }
+    }
+  ]
+}

@@ -1,52 +1,46 @@
 # Sellora
 
-Sellora is being built as a commerce operating kernel with authoritative domain truth, inventory-ledger discipline, and policy-governed automation layered on top.
+Sellora is a **platform intelligence layer** that provides business intelligence, AI sourcing, and workflow automation on top of the `order-management-backend` runtime core.
 
-## Why A New Repo
+## Architecture Position
 
-Sellora is intentionally separate from:
+Sellora operates as a **peer platform layer** that:
 
-- `order-management-backend`
-- `makful-app`
+- **Consumes** from `order-management-backend` (runtime core)
+- **Provides** specialized APIs to `seller-dashboard` (UI layer)
+- **Operates independently** of other platform layers
 
-Those repos contain useful business logic and production learnings, but they also carry product-specific assumptions. This repo starts from a generic platform core and selectively ports proven pieces.
+## Platform Focus
 
-## Product Goal
+Sellora owns **business intelligence and automation**:
 
-Build a backend-first commerce core that can later support seller-facing products such as:
-
-- manage a catalog
-- sell through WhatsApp-led and storefront-led journeys
-- create quotes, invoices, orders, and deposits
-- run fulfillment
-- apply category-specific verification workflows
-- sell through branded storefronts or operator dashboards
-- operate in Arabic and English without bolted-on localization
-- import supplier products into draft listings with AI enrichment
-- layer policy-governed automation on top of clean commerce truth
+- Catalog Management (product definitions, categories, templates)
+- AI Sourcing (supplier product import, enrichment, normalization)
+- Opportunity Engine (profit discovery, scoring, recommendations)
+- Autonomous Workflows (policy-governed automation, decision engines)
+- Platform Integration (external services, third-party APIs)
+- Localization (Arabic/English language support)
+- WhatsApp Integration (messaging, conversational commerce)
+- Multi-tenant Management (seller onboarding, platform policies)
 
 ## Market Position
 
-Sellora is not aiming to be a generic store builder.
-
-It is being shaped as a UAE-native commerce operating system with:
+Sellora is a **UAE-native commerce platform** with:
 
 - Arabic and English localization
 - WhatsApp-first conversion support
-- quote-to-order and invoice workflows
-- trust features for resale, warranty, and verified inventory
-- multi-tenant seller operations
+- AI-powered product sourcing
+- Automated workflow orchestration
+- Multi-tenant seller operations
 
-## Initial Scope
+## Platform Scope
 
-- multi-tenant seller model
-- category-agnostic catalog
-- authoritative order creation and order lifecycle
-- inventory ledger and stock reservation discipline
-- payment lifecycle
-- shipment and fulfillment hooks
-- verification templates by category
-- migration path from the legacy apps
+- Category-agnostic catalog management
+- AI-powered supplier product import
+- Profit opportunity discovery and scoring
+- Policy-governed automation workflows
+- External service integrations
+- Localization and cultural adaptation
 
 ## Docs
 
@@ -62,64 +56,60 @@ It is being shaped as a UAE-native commerce operating system with:
 - [Open Source Stack Map](./docs/OSS_STACK_MAP.md)
 - [Build Order](./docs/BUILD_ORDER.md)
 
-## Starter Code
+## Platform Architecture
 
-The `src/domain` tree contains the generic platform core:
+The `src/domain` tree contains the platform intelligence core:
 
-- `tenancy`
-- `catalog`
-- `orders`
-- `verification`
-- `quotes`
-- `messaging`
-- `localization`
-- `sourcing`
-- `opportunities`
-- `autonomy`
-- `ports`
-- `events`
+- `catalog` - Product definitions and categories
+- `sourcing` - AI-powered supplier import
+- `opportunities` - Profit discovery and scoring
+- `autonomy` - Policy-governed workflows
+- `localization` - Arabic/English support
+- `integration` - External service adapters
+- `tenancy` - Multi-tenant management
 
-These files are intentionally small and explicit so we can evolve the architecture without dragging in old debt.
+## Current Implementation
 
-## Current Scaffold
+The repo includes:
 
-The repo now includes:
+- Platform-specific Prisma schema in `prisma/schema.prisma`
+- Runtime API client for consuming `order-management-backend`
+- Catalog management modules and templates
+- AI sourcing and enrichment pipelines
+- Opportunity discovery and scoring engines
+- Workflow automation and policy engines
+- WhatsApp integration and messaging
+- Localization and cultural adaptation
+- External service integration adapters
 
-- a generic Prisma schema in `prisma/schema.prisma`
-- environment validation in `src/core/config.ts`
-- Prisma client wiring in `src/core/db/prisma.ts`
-- category template registry in `src/modules/catalog`
-- order state machine and inventory ledger modules in `src/modules/orders`
-- authoritative order creation service and Prisma checkout repository
-- quote and messaging starter domains
-- UAE market profile scaffolding
-- supplier sourcing and AI enrichment starter domains
-- profit opportunity discovery and scoring starter domains
-- autonomous agent and workflow starter domains
-- workflow and integration port contracts
-- adapter stubs for Temporal, Stagehand, Chatwoot, Karrio, Convoy, and Mastra
-- Prisma-backed repositories for source listings, opportunities, autonomy policies, workflow runs, and action logs
-- legacy intake planning in `src/modules/migration`
+## Runtime Integration
+
+Sellora consumes from `order-management-backend`:
+
+- Order creation and status APIs
+- Payment processing and status APIs
+- Authentication and user management APIs
+- Inventory and fulfillment APIs
+
+## Platform APIs
+
+Sellora provides to `seller-dashboard`:
+
+- Catalog management APIs
+- AI sourcing and enrichment APIs
+- Opportunity discovery APIs
+- Workflow automation APIs
+- Localization and messaging APIs
 
 ## Deployment
 
-Single-instance deployment is container-first.
+Container-first deployment as platform service:
 
-1. Build the image:
+1. Build platform image:
    `docker build -t sellora:latest .`
-2. Provide production env vars, especially:
-   `DATABASE_URL`, `OPERATOR_API_TOKEN`, `PAYMENT_WEBHOOK_SECRET`, `KARRIO_WEBHOOK_SECRET`
-3. Run migrations on startup:
-   the container entrypoint runs `npx prisma migrate deploy`
-4. Start the service:
-   the container serves HTTP on port `3000`
-5. Verify:
+2. Configure runtime API connections
+3. Deploy as independent platform service
+4. Verify platform APIs:
    `GET /health`
-   `GET /ready`
-
-## Next Build Steps
-
-1. Implement the authoritative order transition service.
-2. Add cancel -> release inventory and fulfill -> deduct inventory flows.
-3. Add truthful order events and idempotency checks around the order lifecycle.
-4. Add payment core only after the order lifecycle is complete.
+   `GET /catalog/products`
+   `GET /opportunities`
