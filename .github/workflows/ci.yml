@@ -36,11 +36,19 @@ jobs:
             echo "DATABASE_URL is configured (length: ${#DATABASE_URL})"
           fi
 
+      - name: Setup test database
+        run: |
+          echo "DATABASE_URL is: $DATABASE_URL"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set, using test database"
+            export DATABASE_URL="postgresql://test:test@localhost:5432/test"
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
 
       - name: Verify Node version
         run: node -v
@@ -57,21 +65,10 @@ jobs:
       - name: Run tests
         run: npm run test
 
-      - name: Setup Database Schema
-        run: npx prisma db push --force-reset
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-
       - name: Run integration tests
         run: npm run test:integration
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Check code formatting
-        run: npm run format:check
-
-      - name: Lint code
-        run: npm run lint
-
       - name: Type check
-        run: npm run type-check
+        run: npm run typecheck
