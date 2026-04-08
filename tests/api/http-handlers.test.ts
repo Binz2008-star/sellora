@@ -15,6 +15,7 @@ import type { PaymentAttemptContext } from "../../src/ports/payment-repository.j
 import type { Order, FulfillmentRecord } from "../../src/domain/orders/order.js";
 import type { NormalizedShippingWebhook } from "../../src/adapters/karrio/karrio-webhook-ingress.js";
 import type { PaymentAttempt } from "../../src/domain/payments/payment.js";
+import type { StorefrontSettings } from "../../src/domain/tenancy/seller.js";
 
 function makeOrder(status: Order["status"] = "pending_payment"): Order {
   return {
@@ -135,8 +136,70 @@ class FakeCreateTenantService {
       defaultCurrency: "AED",
       createdAt: "2026-04-06T00:00:00.000Z",
       updatedAt: "2026-04-06T00:00:00.000Z"
+    },
+    storefront: {
+      sellerId: "seller_1",
+      brandName: "Seller One",
+      primaryLocale: "en-AE",
+      supportWhatsApp: "+971500000001",
+      categoryKeys: [],
+      trustPolicyIds: [],
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z"
+    },
+    ownerMembership: {
+      sellerId: "seller_1",
+      userId: "user_1",
+      role: "owner",
+      createdAt: "2026-04-06T00:00:00.000Z"
     }
   }));
+}
+
+function makeStorefront(
+  overrides: Partial<StorefrontSettings> = {}
+): StorefrontSettings {
+  return {
+    sellerId: "seller_1",
+    brandName: "Seller One",
+    primaryLocale: "en-AE",
+    supportPhone: undefined,
+    supportWhatsApp: "+971500000001",
+    categoryKeys: [],
+    trustPolicyIds: [],
+    createdAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    ...overrides
+  };
+}
+
+class FakeGetSellerStorefrontSettingsService {
+  execute = vi.fn(async (sellerId: string): Promise<StorefrontSettings> =>
+    makeStorefront({ sellerId })
+  );
+}
+
+class FakeUpdateSellerStorefrontSettingsService {
+  execute = vi.fn(
+    async (input: {
+      sellerId: string;
+      brandName?: string;
+      primaryLocale?: string;
+      supportPhone?: string | null;
+      supportWhatsApp?: string | null;
+      categoryKeys?: string[];
+      trustPolicyIds?: string[];
+    }): Promise<StorefrontSettings> =>
+      makeStorefront({
+        sellerId: input.sellerId,
+        brandName: input.brandName ?? "Seller One",
+        primaryLocale: input.primaryLocale ?? "en-AE",
+        supportPhone: input.supportPhone ?? undefined,
+        supportWhatsApp: input.supportWhatsApp ?? undefined,
+        categoryKeys: input.categoryKeys ?? [],
+        trustPolicyIds: input.trustPolicyIds ?? []
+      })
+  );
 }
 
 class FakeBookOrderShipmentService {
@@ -257,6 +320,10 @@ class FakeAcknowledgeNotificationService {
 }
 
 class FakeOperatorQueryRepository implements OperatorQueryRepository {
+  getSellerStorefrontSettings = vi.fn(async (sellerId: string): Promise<StorefrontSettings> =>
+    makeStorefront({ sellerId })
+  );
+
   getOrderDetail = vi.fn(async (): Promise<OperatorOrderDetail> => ({
     order: makeOrder("shipped"),
     customer: {
@@ -374,6 +441,8 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
   const paymentService = new FakePaymentService();
   const healthCheckService = new FakeHealthCheckService();
   const createTenantService = new FakeCreateTenantService();
+  const getSellerStorefrontSettingsService = new FakeGetSellerStorefrontSettingsService();
+  const updateSellerStorefrontSettingsService = new FakeUpdateSellerStorefrontSettingsService();
   const bookOrderShipmentService = new FakeBookOrderShipmentService();
   const confirmOrderDeliveryService = new FakeConfirmOrderDeliveryService();
   const handleShippingWebhookService = new FakeHandleShippingWebhookService();
@@ -387,6 +456,8 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     operatorQueryRepository,
     notificationQueryRepository,
     createTenantService,
+    getSellerStorefrontSettingsService,
+    updateSellerStorefrontSettingsService,
     acknowledgeNotificationService,
     healthCheckService,
     paymentService,
@@ -403,6 +474,8 @@ function createHandlers(accessRepository: HttpAccessRepository = new FakeHttpAcc
     handlers,
     healthCheckService,
     createTenantService,
+    getSellerStorefrontSettingsService,
+    updateSellerStorefrontSettingsService,
     paymentService,
     bookOrderShipmentService,
     confirmOrderDeliveryService,
@@ -481,7 +554,63 @@ describe("Sellora HTTP handlers", () => {
       slug: "seller-one",
       whatsappNumber: "+971500000001"
     });
-    expect((await response.json()).tenant.seller.slug).toBe("seller-one");
+    const body = await response.json();
+    expect(body.tenant.seller.slug).toBe("seller-one");
+    expect(body.tenant.storefront.primaryLocale).toBe("en-AE");
+    expect(body.tenant.ownerMembership.role).toBe("owner");
+  });
+
+  it("reads storefront settings within seller scope", async () => {
+    const { handlers, getSellerStorefrontSettingsService } = createHandlers();
+
+    const response = await handlers.getSellerStorefront(
+      buildRequest("/api/seller/storefront", {
+        method: "GET",
+        headers: {
+          authorization: "Bearer operator-secret",
+          "x-sellora-seller-id": "seller_1"
+        }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(getSellerStorefrontSettingsService.execute).toHaveBeenCalledWith("seller_1");
+    expect((await response.json()).storefront.sellerId).toBe("seller_1");
+  });
+
+  it("updates storefront settings within seller scope without cross-tenant targeting", async () => {
+    const { handlers, updateSellerStorefrontSettingsService } = createHandlers();
+
+    const response = await handlers.updateSellerStorefront(
+      buildRequest("/api/seller/storefront", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer operator-secret",
+          "x-sellora-seller-id": "seller_1"
+        },
+        json: {
+          brandName: "Seller One Updated",
+          primaryLocale: "ar-AE",
+          supportWhatsApp: "+971500009999",
+          categoryKeys: ["electronics", " accessories ", "electronics"],
+          trustPolicyIds: ["trusted-seller"]
+        }
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateSellerStorefrontSettingsService.execute).toHaveBeenCalledWith({
+      sellerId: "seller_1",
+      brandName: "Seller One Updated",
+      primaryLocale: "ar-AE",
+      supportWhatsApp: "+971500009999",
+      categoryKeys: ["electronics", "accessories", "electronics"],
+      trustPolicyIds: ["trusted-seller"]
+    });
+
+    const body = await response.json();
+    expect(body.storefront.sellerId).toBe("seller_1");
+    expect(body.storefront.brandName).toBe("Seller One Updated");
   });
 
   it("rejects invalid body payloads with validation errors", async () => {
