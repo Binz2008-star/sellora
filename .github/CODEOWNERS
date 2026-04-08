@@ -1,0 +1,24 @@
+# Platform Intelligence Ownership
+
+# Architecture Documentation
+/docs/BOUNDARY_RULES.md @Binz2008-star
+/MIGRATION_LIST.md @Binz2008-star
+/STOP_OVERLAP_WORK.md @Binz2008-star
+
+# Platform Domain Code
+/src/domain/ @Binz2008-star
+/src/modules/ @Binz2008-star
+
+# Runtime Integration
+/src/integration/runtime-client/ @Binz2008-star
+
+# Boundary Enforcement
+.github/workflows/boundary-checks.yml @Binz2008-star
+/scripts/check-boundaries.sh @Binz2008-star
+
+# Platform APIs
+/src/app/api/ @Binz2008-star
+
+# Configuration
+/package.json @Binz2008-star
+/prisma/ @Binz2008-star
