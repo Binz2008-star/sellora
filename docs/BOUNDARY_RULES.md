@@ -7,6 +7,7 @@
 ## **Domain Ownership**
 
 ### **Sellora Owns (Authoritative)**
+
 - Catalog Management (products, categories, templates)
 - AI Sourcing (supplier import, enrichment, normalization)
 - Opportunity Engine (profit discovery, scoring, recommendations)
@@ -17,12 +18,14 @@
 - Multi-tenant Management (seller onboarding, platform policies)
 
 ### **Sellora Consumes (via APIs)**
+
 - Order status from runtime
 - Payment status from runtime
 - Inventory availability from runtime
 - User information from runtime
 
 ### **Sellora Forbidden (Runtime Domain)**
+
 - Order creation logic
 - Order state transitions
 - Payment processing logic
@@ -35,6 +38,7 @@
 ## **Data Ownership Rules**
 
 ### **Platform Database (Allowed)**
+
 ```sql
 -- Catalog tables
 products
@@ -57,6 +61,7 @@ cultural_adaptations
 ```
 
 ### **Runtime Database (Forbidden)**
+
 ```sql
 -- These tables CANNOT exist in sellora
 orders
@@ -73,14 +78,16 @@ audit_events
 ## **API Boundaries**
 
 ### **Platform APIs (Can Expose)**
+
 ```typescript
 // Catalog APIs
 GET /api/catalog/products
 POST /api/catalog/products
 PUT /api/catalog/products/{id}
 
-// Sourcing APIs  
+// Sourcing APIs
 POST /api/sourcing/import
+
 GET /api/sourcing/opportunities
 
 // Workflow APIs
@@ -89,26 +96,28 @@ POST /api/workflows/execute
 ```
 
 ### **Runtime APIs (Cannot Expose)**
+
 ```typescript
 // These endpoints CANNOT exist in sellora
-POST /api/orders
-PATCH /api/orders/{id}/status
-POST /api/payments
-POST /api/inventory/reserve
-POST /api/auth/login
+POST / api / orders;
+PATCH / api / orders / { id } / status;
+POST / api / payments;
+POST / api / inventory / reserve;
+POST / api / auth / login;
 ```
 
 ### **Runtime Client Usage**
+
 ```typescript
 // CORRECT: Use runtime client
-import { runtimeClient } from '../integration/runtime-client'
+import { runtimeClient } from "../integration/runtime-client";
 
-const order = await runtimeClient.getOrder(orderId)
-const inventory = await runtimeClient.getInventory(productId)
+const order = await runtimeClient.getOrder(orderId);
+const inventory = await runtimeClient.getInventory(productId);
 
 // FORBIDDEN: Direct runtime access
-fetch('/api/orders') // WRONG
-prisma.order.find()  // WRONG
+fetch("/api/orders"); // WRONG
+prisma.order.find(); // WRONG
 ```
 
 ---
@@ -116,21 +125,22 @@ prisma.order.find()  // WRONG
 ## **Code Patterns**
 
 ### **Allowed Patterns**
+
 ```typescript
 // Catalog management - PLATFORM DOMAIN
 class CatalogService {
   async createProduct(data: CreateProductData) {
     // Platform database only
-    return await this.platformDb.product.create({ data })
+    return await this.platformDb.product.create({ data });
   }
-  
+
   async enrichProduct(productId: string) {
     // AI enrichment logic
-    const enrichment = await this.aiService.enrich(productId)
+    const enrichment = await this.aiService.enrich(productId);
     return await this.platformDb.product.update({
       where: { id: productId },
-      data: { enrichment }
-    })
+      data: { enrichment },
+    });
   }
 }
 
@@ -138,26 +148,27 @@ class CatalogService {
 class OrderStatusService {
   async getOrderStatus(orderId: string) {
     // Query runtime via client
-    return await this.runtimeClient.getOrder(orderId)
+    return await this.runtimeClient.getOrder(orderId);
   }
 }
 ```
 
 ### **Forbidden Patterns**
+
 ```typescript
 // FORBIDDEN: Runtime logic in platform
 class OrderService {
   async createOrder(data: CreateOrderData) {
     // VIOLATION: Order creation belongs to runtime
-    return await this.db.order.create({ data })
+    return await this.db.order.create({ data });
   }
-  
+
   async transitionOrder(orderId: string, status: OrderStatus) {
     // VIOLATION: State transitions belong to runtime
     return await this.db.order.update({
       where: { id: orderId },
-      data: { status }
-    })
+      data: { status },
+    });
   }
 }
 
@@ -167,8 +178,8 @@ class InventoryService {
     // VIOLATION: Inventory mutations belong to runtime
     return await this.runtimeDb.inventory.update({
       where: { productId },
-      data: { reserved: { increment: quantity } }
-    })
+      data: { reserved: { increment: quantity } },
+    });
   }
 }
 ```
@@ -178,64 +189,66 @@ class InventoryService {
 ## **Integration Rules**
 
 ### **Runtime Client Integration**
+
 ```typescript
 // src/integration/runtime-client/index.ts
 export class RuntimeClient {
-  private baseUrl: string
-  private authToken: string
-  
+  private baseUrl: string;
+  private authToken: string;
+
   constructor(config: RuntimeConfig) {
-    this.baseUrl = config.runtimeUrl
-    this.authToken = config.authToken
+    this.baseUrl = config.runtimeUrl;
+    this.authToken = config.authToken;
   }
-  
+
   // Query APIs only
   async getOrder(orderId: string): Promise<Order> {
-    return await this.fetch(`/api/orders/${orderId}`)
+    return await this.fetch(`/api/orders/${orderId}`);
   }
-  
+
   async getPayment(paymentId: string): Promise<Payment> {
-    return await this.fetch(`/api/payments/${paymentId}`)
+    return await this.fetch(`/api/payments/${paymentId}`);
   }
-  
+
   async getInventory(productId: string): Promise<Inventory> {
-    return await this.fetch(`/api/inventory/${productId}`)
+    return await this.fetch(`/api/inventory/${productId}`);
   }
-  
+
   private async fetch(endpoint: string): Promise<any> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       headers: {
-        'Authorization': `Bearer ${this.authToken}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    return response.json()
+        Authorization: `Bearer ${this.authToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    return response.json();
   }
 }
 ```
 
 ### **Service Integration Pattern**
+
 ```typescript
 // src/services/catalog-service.ts
 export class CatalogService {
   constructor(
     private platformDb: PrismaClient,
-    private runtimeClient: RuntimeClient
+    private runtimeClient: RuntimeClient,
   ) {}
-  
+
   async getProductWithAvailability(productId: string) {
     // Platform data
     const product = await this.platformDb.product.findUnique({
-      where: { id: productId }
-    })
-    
+      where: { id: productId },
+    });
+
     // Runtime data via API
-    const inventory = await this.runtimeClient.getInventory(productId)
-    
+    const inventory = await this.runtimeClient.getInventory(productId);
+
     return {
       ...product,
-      available: inventory.available
-    }
+      available: inventory.available,
+    };
   }
 }
 ```
