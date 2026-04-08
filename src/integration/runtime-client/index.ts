@@ -15,9 +15,27 @@ export interface Order {
   id: string
   status: string
   sellerId: string
-  total: number
+  customerId: string
+  orderNumber: string
+  mode: string
+  paymentPolicy: string
+  paymentStatus: string
+  subtotalMinor: number
+  deliveryFeeMinor: number
+  totalMinor: number
+  currency: string
+  reservationExpiresAt?: string
+  notes?: string
   createdAt: string
   updatedAt: string
+  customer?: {
+    city: string | null
+  }
+  lines?: Array<{
+    productOfferingId: string
+    titleSnapshot: string
+    quantity: number
+  }>
 }
 
 export interface Payment {

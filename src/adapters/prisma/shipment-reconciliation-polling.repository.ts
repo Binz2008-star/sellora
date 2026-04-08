@@ -57,9 +57,6 @@ export class PrismaShipmentReconciliationPollingRepository
           providerStatus: {
             in: ["delivered", "returned", "cancelled", "failed"]
           }
-        },
-        order: {
-          status: "SHIPPED"
         }
       },
       orderBy: [
@@ -69,6 +66,6 @@ export class PrismaShipmentReconciliationPollingRepository
       take: input.limit
     });
 
-    return records.map((record) => mapCandidate(record as unknown as FulfillmentRecordRow));
+    return (records as unknown as FulfillmentRecordRow[]).map(mapCandidate);
   }
 }

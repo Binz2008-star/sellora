@@ -609,6 +609,7 @@ model NotificationLog {
 model PaymentAttempt {
   id                String        @id @default(cuid())
   sellerId          String
+  orderId           String?
   provider          String
   providerReference String?
   idempotencyKey    String?
@@ -624,12 +625,14 @@ model PaymentAttempt {
   @@unique([provider, providerReference])
   @@unique([sellerId, idempotencyKey])
   @@index([sellerId, status])
+  @@index([orderId])
 }
 
 
 model FulfillmentRecord {
   id             String         @id @default(cuid())
   sellerId       String
+  orderId        String
   status         ShipmentStatus @default(NOT_READY)
   bookingReference String?
   courierName    String?
@@ -645,6 +648,7 @@ model FulfillmentRecord {
   seller         Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   @@index([sellerId, status])
+  @@index([orderId])
 }
 
 model ShippingWebhookReceipt {

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../core/db/prisma.js";
 import type { FulfillmentRecord, Order } from "../../domain/orders/order.js";
 import type { KeyValueRecord } from "../../domain/shared/types.js";
+import { getRuntimeClient } from "../../integration/runtime-client/index.js";
 import type {
   FulfillmentDeliveryContext,
   FulfillmentRepository,
@@ -11,51 +12,25 @@ import type {
 } from "../../ports/fulfillment-repository.js";
 import type { RepositoryTransaction } from "../../ports/repository-transaction.js";
 
-type OrderRecord = {
+type FulfillmentRecordRow = {
   id: string;
   sellerId: string;
-  customerId: string;
-  orderNumber: string;
-  mode: string;
+  orderId: string;
   status: string;
-  paymentPolicy: string;
-  paymentStatus: string;
-  subtotalMinor: number;
-  deliveryFeeMinor: number;
-  totalMinor: number;
-  currency: string;
-  reservationExpiresAt: Date | null;
-  notes: string | null;
+  bookingReference: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  providerStatus: string | null;
+  rawPayloadJson: unknown;
+  lastWebhookAt: Date | null;
+  handedOffAt: Date | null;
+  deliveredAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  customer: {
-    city: string | null;
-  };
-  lines: Array<{
-    productOfferingId: string;
-    titleSnapshot: string;
-    quantity: number;
-  }>;
-  fulfillmentRecord?: {
-    id: string;
-    sellerId: string;
-    orderId: string;
-    status: string;
-    bookingReference: string | null;
-    courierName: string | null;
-    trackingNumber: string | null;
-    trackingUrl: string | null;
-    providerStatus: string | null;
-    rawPayloadJson: unknown;
-    lastWebhookAt: Date | null;
-    handedOffAt: Date | null;
-    deliveredAt: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
-  } | null;
 };
 
-function mapOrder(record: OrderRecord): Order {
+function mapOrder(record: any): Order {
   return {
     id: record.id,
     sellerId: record.sellerId,
@@ -80,15 +55,15 @@ function mapOrder(record: OrderRecord): Order {
       amountMinor: record.totalMinor,
       currency: record.currency
     },
-    reservationExpiresAt: record.reservationExpiresAt?.toISOString(),
+    reservationExpiresAt: record.reservationExpiresAt,
     notes: record.notes ?? undefined,
-    createdAt: record.createdAt.toISOString(),
-    updatedAt: record.updatedAt.toISOString()
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt
   };
 }
 
 function mapFulfillmentRecord(
-  record: NonNullable<OrderRecord["fulfillmentRecord"]>
+  record: FulfillmentRecordRow
 ): FulfillmentRecord {
   return {
     id: record.id,
@@ -135,9 +110,6 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
     const fulfillment = await client.fulfillmentRecord.findFirst({
       where: {
         OR: orClauses
-      },
-      include: {
-        order: true
       }
     });
 
@@ -145,9 +117,11 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
       return null;
     }
 
+    const runtimeOrder = await getRuntimeClient().getOrder(fulfillment.orderId);
+
     return {
-      order: mapOrder(fulfillment.order as unknown as OrderRecord),
-      fulfillmentRecord: mapFulfillmentRecord(fulfillment as unknown as NonNullable<OrderRecord["fulfillmentRecord"]>)
+      order: mapOrder(runtimeOrder),
+      fulfillmentRecord: mapFulfillmentRecord(fulfillment as FulfillmentRecordRow)
     };
   }
 
@@ -171,7 +145,7 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
       }
     });
 
-    return mapFulfillmentRecord(updated as unknown as NonNullable<OrderRecord["fulfillmentRecord"]>);
+    return mapFulfillmentRecord(updated as FulfillmentRecordRow);
   }
 
   async getShipmentContext(
@@ -179,38 +153,23 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
     transaction?: RepositoryTransaction
   ): Promise<FulfillmentShipmentContext | null> {
     const client = (transaction as any) ?? prisma;
-    const order = await client.order.findUnique({
-      where: { id: orderId },
-      include: {
-        customer: {
-          select: {
-            city: true
-          }
-        },
-        lines: {
-          select: {
-            productOfferingId: true,
-            titleSnapshot: true,
-            quantity: true
-          }
-        },
-        fulfillmentRecord: true
-      }
-    });
-
-    if (!order) {
+    
+    const runtimeOrder = await getRuntimeClient().getOrder(orderId);
+    if (!runtimeOrder) {
       return null;
     }
 
-    const record = order as unknown as OrderRecord;
+    const fulfillmentRecord = await client.fulfillmentRecord.findFirst({
+      where: { orderId }
+    });
 
     return {
-      order: mapOrder(record),
-      destinationCity: record.customer.city ?? undefined,
-      fulfillmentRecord: record.fulfillmentRecord
-        ? mapFulfillmentRecord(record.fulfillmentRecord)
+      order: mapOrder(runtimeOrder),
+      destinationCity: runtimeOrder.customer?.city ?? undefined,
+      fulfillmentRecord: fulfillmentRecord
+        ? mapFulfillmentRecord(fulfillmentRecord as FulfillmentRecordRow)
         : undefined,
-      lines: record.lines.map((line) => ({
+      lines: (runtimeOrder.lines ?? []).map((line: any) => ({
         productOfferingId: line.productOfferingId,
         titleSnapshot: line.titleSnapshot,
         quantity: line.quantity
@@ -222,24 +181,21 @@ export class PrismaFulfillmentRepository implements FulfillmentRepository {
     orderId: string,
     transaction?: RepositoryTransaction
   ): Promise<FulfillmentDeliveryContext | null> {
-    const client = (transaction as typeof prisma | undefined) ?? prisma;
-    const order = await client.order.findUnique({
-      where: { id: orderId },
-      include: {
-        fulfillmentRecord: true
-      }
-    });
-
-    if (!order) {
+    const client = (transaction as any) ?? prisma;
+    
+    const runtimeOrder = await getRuntimeClient().getOrder(orderId);
+    if (!runtimeOrder) {
       return null;
     }
 
-    const record = order as unknown as OrderRecord;
+    const fulfillmentRecord = await client.fulfillmentRecord.findFirst({
+      where: { orderId }
+    });
 
     return {
-      order: mapOrder(record),
-      fulfillmentRecord: record.fulfillmentRecord
-        ? mapFulfillmentRecord(record.fulfillmentRecord)
+      order: mapOrder(runtimeOrder),
+      fulfillmentRecord: fulfillmentRecord
+        ? mapFulfillmentRecord(fulfillmentRecord as FulfillmentRecordRow)
         : undefined
     };
   }
