@@ -2,9 +2,9 @@ name: CI / Quality
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, feat/retrieval-benchmark]
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, feat/retrieval-benchmark]
 
 jobs:
   quality:
