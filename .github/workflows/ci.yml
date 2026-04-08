@@ -57,6 +57,11 @@ jobs:
     - name: Run tests
       run: npm run test
 
+    - name: Setup Database Schema
+      run: npx prisma db push
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
     - name: Run integration tests
       run: npm run test:integration
       env:

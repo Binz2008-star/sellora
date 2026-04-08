@@ -14,32 +14,27 @@ function nextId(prefix: string): string {
 }
 
 async function cleanupDatabase() {
-  await prisma.$executeRawUnsafe(`
-    TRUNCATE TABLE
-      "PaymentAttempt",
-      "FulfillmentRecord",
-      "ShippingWebhookReceipt",
-      "NotificationLog",
-      "InventoryMovement",
-      "ProductOffering",
-      "ProductMedia",
-      "ProductInspection",
-      "Product",
-      "Customer",
-      "StorefrontSettings",
-      "StaffMembership",
-      "SellerAutonomyPolicy",
-      "Quote",
-      "Invoice",
-      "ConversationMessage",
-      "ConversationThread",
-      "WarrantyPolicy",
-      "VerificationTemplate",
-      "Seller",
-      "User",
-      "CategoryTemplate"
-    RESTART IDENTITY CASCADE
-  `);
+  // 1. Scalability: Fetch all table names dynamically (PostgreSQL specific)
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables WHERE schemaname='public';
+  `;
+
+  // 2. Error Handling & Maintenance: Clean everything except the migrations table
+  const tableNames = tables
+    .map((t) => t.tablename)
+    .filter((name) => name !== '_prisma_migrations')
+    .map((name) => `"${name}"`)
+    .join(', ');
+
+  if (tableNames.length > 0) {
+    try {
+      // 3. Performance: Single query to truncate all tables efficiently
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE;`);
+    } catch (error) {
+      console.error("Database cleanup failed:", error);
+      throw error;
+    }
+  }
 }
 
 describe.sequential("Storefront settings integration", () => {
