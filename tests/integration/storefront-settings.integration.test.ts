@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { prisma } from "../../src/core/db/prisma.js";
+import { PrismaStorefrontSettingsRepository } from "../../src/adapters/prisma/storefront-settings.repository.js";
+import { PrismaTenantRepository } from "../../src/adapters/prisma/tenant.repository.js";
 import { CreateTenantService } from "../../src/application/tenancy/create-tenant.service.js";
 import { GetSellerStorefrontSettingsService } from "../../src/application/tenancy/get-seller-storefront-settings.service.js";
 import { UpdateSellerStorefrontSettingsService } from "../../src/application/tenancy/update-seller-storefront-settings.service.js";
-import { PrismaTenantRepository } from "../../src/adapters/prisma/tenant.repository.js";
-import { PrismaStorefrontSettingsRepository } from "../../src/adapters/prisma/storefront-settings.repository.js";
+import { prisma } from "../../src/core/db/prisma.js";
 
 let sequence = 0;
 
@@ -16,14 +16,11 @@ function nextId(prefix: string): string {
 async function cleanupDatabase() {
   await prisma.$executeRawUnsafe(`
     TRUNCATE TABLE
-      "OrderEvent",
       "PaymentAttempt",
       "FulfillmentRecord",
       "ShippingWebhookReceipt",
       "NotificationLog",
       "InventoryMovement",
-      "OrderLine",
-      "Order",
       "ProductOffering",
       "ProductMedia",
       "ProductInspection",
@@ -32,13 +29,6 @@ async function cleanupDatabase() {
       "StorefrontSettings",
       "StaffMembership",
       "SellerAutonomyPolicy",
-      "WorkflowRun",
-      "AutonomousActionLog",
-      "ImportJob",
-      "Opportunity",
-      "SourceListing",
-      "SupplierSource",
-      "QuoteLine",
       "Quote",
       "Invoice",
       "ConversationMessage",
