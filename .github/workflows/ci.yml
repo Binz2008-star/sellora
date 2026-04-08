@@ -18,11 +18,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Debug environment variables
+      run: |
+        echo "Available environment variables:"
+        env | grep -E "DATABASE|NODE_ENV" || echo "No DATABASE or NODE_ENV vars found"
+        echo "Secrets status:"
+        echo "DATABASE_URL length: ${#DATABASE_URL}"
+        echo "NODE_ENV: $NODE_ENV"
+
     - name: Validate test database configuration
       run: |
         if [ -z "$DATABASE_URL" ]; then
           echo "DATABASE_URL is not set"
+          echo "Please check GitHub repository secrets"
           exit 1
+        else
+          echo "DATABASE_URL is configured (length: ${#DATABASE_URL})"
         fi
 
     - name: Setup Node.js
