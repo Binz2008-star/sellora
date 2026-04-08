@@ -36,10 +36,10 @@ jobs:
       run: npm run test:integration
 
     - name: Check code formatting
-      run: npm run format:check || echo "No format script found"
+      run: npm run format:check
 
     - name: Lint code
-      run: npm run lint || echo "No lint script found"
+      run: npm run lint
 
     - name: Type check
-      run: npm run type-check || echo "No type-check script found"
+      run: npm run type-check
