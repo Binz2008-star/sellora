@@ -1,6 +1,6 @@
 /**
  * Runtime API Client
- * 
+ *
  * Provides safe query-only access to runtime APIs.
  * All runtime access must go through this client.
  */
@@ -69,7 +69,7 @@ export class RuntimeClient {
     if (options?.status) params.append('status', options.status)
     if (options?.page) params.append('page', options.page.toString())
     if (options?.limit) params.append('limit', options.limit.toString())
-    
+
     return this.fetch(`/api/sellers/${sellerId}/orders?${params}`)
   }
 
@@ -96,7 +96,7 @@ export class RuntimeClient {
     const params = new URLSearchParams()
     if (options?.page) params.append('page', options.page.toString())
     if (options?.limit) params.append('limit', options.limit.toString())
-    
+
     return this.fetch(`/api/sellers/${sellerId}/inventory?${params}`)
   }
 
@@ -110,7 +110,7 @@ export class RuntimeClient {
 
   private async fetch(endpoint: string): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`
-    
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
@@ -135,17 +135,17 @@ export class RuntimeClient {
       }
 
       return await response.json()
-    } catch (error) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId)
-      
-      if (error.name === 'AbortError') {
+
+      if (error instanceof Error && error.name === 'AbortError') {
         throw new RuntimeApiError(
           'Runtime API request timeout',
           408,
           endpoint
         )
       }
-      
+
       throw error
     }
   }
