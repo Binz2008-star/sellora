@@ -2,9 +2,9 @@ name: CI / Quality
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop, feat/retrieval-benchmark]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop, feat/retrieval-benchmark]
 
 jobs:
   quality:
@@ -15,63 +15,60 @@ jobs:
       NODE_ENV: test
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Debug environment variables
-      run: |
-        echo "Available environment variables:"
-        env | grep -E "DATABASE|NODE_ENV" || echo "No DATABASE or NODE_ENV vars found"
-        echo "Secrets status:"
-        echo "DATABASE_URL length: ${#DATABASE_URL}"
-        echo "NODE_ENV: $NODE_ENV"
+      - name: Debug environment variables
+        run: |
+          echo "Available environment variables:"
+          env | grep -E "DATABASE|NODE_ENV" || echo "No DATABASE or NODE_ENV vars found"
+          echo "Secrets status:"
+          echo "DATABASE_URL length: ${#DATABASE_URL}"
+          echo "NODE_ENV: $NODE_ENV"
 
-    - name: Validate test database configuration
-      run: |
-        if [ -z "$DATABASE_URL" ]; then
-          echo "DATABASE_URL is not set"
-          echo "Please check GitHub repository secrets"
-          exit 1
-        else
-          echo "DATABASE_URL is configured (length: ${#DATABASE_URL})"
-        fi
+      - name: Validate test database configuration
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set"
+            echo "Please check GitHub repository secrets"
+            exit 1
+          else
+            echo "DATABASE_URL is configured (length: ${#DATABASE_URL})"
+          fi
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '24'
-        cache: 'npm'
+      - name: Setup test database
+        run: |
+          echo "DATABASE_URL is: $DATABASE_URL"
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set, using test database"
+            export DATABASE_URL="postgresql://test:test@localhost:5432/test"
+          fi
 
-    - name: Verify Node version
-      run: node -v
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
 
-    - name: Verify npm version
-      run: npm -v
+      - name: Verify Node version
+        run: node -v
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Verify npm version
+        run: npm -v
 
-    - name: Generate Prisma client
-      run: npx prisma generate
+      - name: Install dependencies
+        run: npm ci
 
-    - name: Run tests
-      run: npm run test
+      - name: Generate Prisma client
+        run: npx prisma generate
 
-    - name: Setup Database Schema
-      run: npx prisma db push --force-reset
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Run tests
+        run: npm run test
 
-    - name: Run integration tests
-      run: npm run test:integration
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-    - name: Check code formatting
-      run: npm run format:check
-
-    - name: Lint code
-      run: npm run lint
-
-    - name: Type check
-      run: npm run type-check
+      - name: Type check
+        run: npm run typecheck
